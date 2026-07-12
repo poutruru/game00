@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>game00 全功能文字原型</title>
+<style>
+:root{
+  --bg:#0d0f10;--panel:#141719;--panel2:#0a0c0d;--line:#34393d;
+  --text:#e8ecef;--muted:#90979d;--accent:#d8c48c;--good:#70dc91;
+  --bad:#ff7272;--blue:#78baff;--gold:#f0cf67;--purple:#bf8cff;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+button,select,input{font:inherit}
+header{position:sticky;top:0;z-index:20;background:#0a0c0df2;border-bottom:1px solid var(--line);padding:10px 12px}
+.topline{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.subline{font-size:12px;color:var(--muted);margin-top:4px}
+nav{
+  position:sticky;top:58px;z-index:19;display:grid;grid-template-columns:repeat(6,1fr);
+  background:#101214;border-bottom:1px solid var(--line)
+}
+nav button{border:0;border-right:1px solid #272b2e;background:#101214;color:var(--muted);padding:11px 2px}
+nav button.active{background:#1a1e20;color:var(--accent)}
+main{padding:10px}
+.page{display:none}.page.active{display:block}
+.panel{background:var(--panel);border:1px solid var(--line);padding:11px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.wrap{display:flex;gap:6px;flex-wrap:wrap}
+.btn{background:#23272a;color:var(--text);border:1px solid #53595d;padding:8px 10px}
+.btn.primary{color:#f1d991;border-color:#8b794a}.btn.danger{color:#ff9c9c}.btn:disabled{opacity:.35}
+.small{font-size:12px;color:var(--muted)}
+.name{font-weight:700}.accent{color:var(--accent)}.good{color:var(--good)}.bad{color:var(--bad)}
+.blue{color:var(--blue)}.gold{color:var(--gold)}.purple{color:var(--purple)}
+.card{padding:10px 0;border-bottom:1px solid #2e3336}.card:last-child{border-bottom:0}
+.badge{display:inline-block;border:1px solid #4e5458;padding:2px 5px;margin:2px 3px 2px 0;font-size:11px}
+.log{height:55vh;overflow:auto;white-space:pre-wrap;line-height:1.48;background:var(--panel2);border:1px solid var(--line);padding:10px}
+.log div{margin:0 0 3px}
+.log .damage{color:var(--bad)}.log .heal{color:var(--good)}.log .skill{color:var(--blue)}
+.log .drop{color:var(--gold)}.log .system{color:var(--accent)}.log .death{color:#ff9c9c}
+.hpbar{height:8px;background:#282d30;border:1px solid #3c4246;margin-top:4px}
+.hpfill{height:100%;background:#5bc77a}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+select,input{width:100%;background:#0d0f10;color:var(--text);border:1px solid #52585c;padding:8px}
+hr{border:0;border-top:1px solid var(--line)}
+summary{cursor:pointer;color:var(--accent)}
+@media(max-width:600px){nav{grid-template-columns:repeat(3,1fr);top:58px}.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="topline">
+    <div><span id="mapName">史萊姆平原</span> T<span id="tier">1</span>　<span id="stage">1</span>/10</div>
+    <div>金幣 <span id="gold">0</span></div>
+  </div>
+  <div class="subline">
+    世界周回 <span id="worldClear">0</span>｜英雄精華 <span id="essence">0</span>｜<span id="statusLine">自動戰鬥中</span>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-page="battle">戰鬥</button>
+  <button data-page="party">隊伍</button>
+  <button data-page="bag">背包</button>
+  <button data-page="maps">地圖</button>
+  <button data-page="summon">召募</button>
+  <button data-page="save">存檔</button>
+</nav>
+
+<main>
+<section class="page active" id="battle">
+  <div class="panel">
+    <div class="row">
+      <div>
+        <div>我方：<span id="partySummary"></span></div>
+        <div class="small">敵方：<span id="enemySummary"></span></div>
+      </div>
+      <div class="wrap">
+        <button id="speedBtn" class="btn">1x</button>
+        <button id="toggleBtn" class="btn">暫停</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="battleStatus"></div>
+  <div class="log" id="battleLog"></div>
+</section>
+
+<section class="page" id="party">
+  <div class="panel">
+    <div class="row"><strong>上陣隊伍</strong><span class="small">欄位 <span id="partySlots"></span></span></div>
+    <div id="partyList"></div>
+    <div id="resonanceBox" class="small"></div>
+  </div>
+  <div class="panel">
+    <strong>已擁有角色</strong>
+    <div id="rosterList"></div>
+  </div>
+</section>
+
+<section class="page" id="bag">
+  <div class="panel">
+    <div class="row"><strong>裝備背包</strong><span class="small"><span id="bagCount"></span> 件</span></div>
+    <div class="small">裝備部位：頭、身、腳、主手、副手。套裝只取目前最高的 2／3／5 件效果。</div>
+    <div id="bagList"></div>
+  </div>
+</section>
+
+<section class="page" id="maps">
+  <div class="panel">
+    <strong>地圖</strong>
+    <div id="mapList"></div>
+  </div>
+</section>
+
+<section class="page" id="summon">
+  <div class="panel">
+    <strong>隨機召募</strong>
+    <p class="small">每次 100 金幣。重複角色分解為英雄精華 1。</p>
+    <button id="summonBtn" class="btn primary">召募 1 次</button>
+    <div id="summonResult" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<section class="page" id="save">
+  <div class="panel">
+    <strong>存檔管理</strong>
+    <p class="small">自動存於瀏覽器 localStorage。也可以匯出成文字備份。</p>
+    <div class="wrap">
+      <button id="exportBtn" class="btn">匯出存檔</button>
+      <button id="importBtn" class="btn">匯入存檔</button>
+      <button id="resetBtn" class="btn danger">重置存檔</button>
+    </div>
+    <textarea id="saveText" style="margin-top:10px;width:100%;height:180px;background:#090b0c;color:#ddd;border:1px solid #555"></textarea>
+  </div>
+  <details class="panel">
+    <summary>查看內嵌資料 JSON</summary>
+    <pre id="dataPreview" style="white-space:pre-wrap;font-size:11px"></pre>
+  </details>
+</section>
+</main>
+
+<script id="game-data" type="application/json">
+{
+  "races":[
+    {"id":"human","name":"人類","resonance":{"2":"全隊攻擊與生命 +5%","3":"全隊攻擊與生命 +10%","5":"全隊攻擊與生命 +20%"}},
+    {"id":"elf","name":"精靈","resonance":{"2":"全隊攻速 +8%","3":"全隊攻速 +15%","5":"全隊攻速 +25%，每第4次普攻追加一次攻擊"}},
+    {"id":"beastkin","name":"獸人","resonance":{"2":"全隊暴擊率 +6%","3":"全隊暴擊率 +10%、暴擊傷害 +20%","5":"擊殺後全隊攻擊 +25%，持續8秒"}}
+  ],
+  "jobs":[
+    {"id":"warrior","name":"戰士","hp":520,"atk":46,"def":20,"speed":1.0,"passive":"每損失10%生命，造成傷害提高3%","cdSkill":"旋風斬","trigger":"受擊5次","triggerSkill":"裂地重擊"},
+    {"id":"paladin","name":"聖騎士","hp":650,"atk":34,"def":30,"speed":0.85,"passive":"受到攻擊時10%機率獲得最大生命5%的護盾","cdSkill":"神聖護盾","trigger":"受擊6次","triggerSkill":"神聖挑釁"},
+    {"id":"priest","name":"牧師","hp":360,"atk":36,"def":12,"speed":0.9,"passive":"治療效果提高20%","cdSkill":"治癒術","trigger":"累積治療達自身攻擊1000%","triggerSkill":"神聖祈禱"},
+    {"id":"mage","name":"法師","hp":320,"atk":58,"def":8,"speed":0.95,"passive":"技能冷卻速度提高15%","cdSkill":"火球術","trigger":"施放3次技能","triggerSkill":"暴風雪"},
+    {"id":"rogue","name":"盜賊","hp":350,"atk":54,"def":11,"speed":1.35,"passive":"暴擊率提高10%","cdSkill":"毒刃","trigger":"暴擊2次","triggerSkill":"背刺"},
+    {"id":"hunter","name":"獵人","hp":380,"atk":50,"def":13,"speed":1.2,"passive":"對生命高於80%的敵人增傷15%","cdSkill":"三重射擊","trigger":"普攻4次","triggerSkill":"狙擊"},
+    {"id":"warlock","name":"術士","hp":390,"atk":52,"def":10,"speed":0.9,"passive":"技能傷害的5%轉為生命","cdSkill":"腐化","trigger":"持續傷害累積達800%攻擊","triggerSkill":"惡魔召喚"}
+  ],
+  "maps":[
+    {"id":"slime","name":"史萊姆平原","normal":"史萊姆","elite":"巨大史萊姆","boss":"史萊姆王","trait":"高生命","set":"史萊姆","setRole":"生存"},
+    {"id":"goblin","name":"哥布林營地","normal":"哥布林","elite":"哥布林勇士","boss":"哥布林王","trait":"高攻速","set":"哥布林","setRole":"攻速"},
+    {"id":"wolf","name":"狼嚎森林","normal":"森林狼","elite":"銀背巨狼","boss":"芬里爾","trait":"高暴擊","set":"狼牙","setRole":"暴擊"},
+    {"id":"spider","name":"黑蛛巢穴","normal":"毒蛛","elite":"劇毒母蛛","boss":"蜘蛛女王","trait":"中毒","set":"毒蛛","setRole":"持續傷害"},
+    {"id":"gargoyle","name":"石像鬼城塞","normal":"石像鬼","elite":"鐵翼石像鬼","boss":"巨像守衛","trait":"高防禦與護盾","set":"破城","setRole":"穿透"},
+    {"id":"grave","name":"骸骨墓園","normal":"骷髏兵","elite":"死亡騎士","boss":"巫妖王","trait":"復活","set":"亡者","setRole":"吸血續航"},
+    {"id":"frost","name":"冰封雪原","normal":"冰元素","elite":"冰霜守衛","boss":"冰霜巨龍","trait":"緩速","set":"冰霜","setRole":"控制增傷"},
+    {"id":"volcano","name":"熔岩火山","normal":"火元素","elite":"熔岩巨人","boss":"炎魔","trait":"燃燒","set":"熔岩","setRole":"技能爆發"},
+    {"id":"abyss","name":"惡魔深淵","normal":"惡魔士兵","elite":"深淵騎士","boss":"巴洛格","trait":"殘血狂暴","set":"深淵","setRole":"低血爆發"},
+    {"id":"castle","name":"魔王城","normal":"魔王親衛","elite":"魔將軍","boss":"魔王","trait":"綜合能力","set":"魔王","setRole":"泛用"}
+  ],
+  "sets":{
+    "史萊姆":{"2":"生命 +15%","3":"每秒恢復1%生命","5":"生命低於40%時每場立即恢復25%一次"},
+    "哥布林":{"2":"攻速 +10%","3":"普攻15%機率追加一次攻擊","5":"追加攻擊傷害提高至100%"},
+    "狼牙":{"2":"暴擊率 +10%","3":"暴擊傷害 +30%","5":"暴擊後追加一次50%傷害攻擊"},
+    "毒蛛":{"2":"持續傷害 +20%","3":"持續時間 +50%","5":"持續傷害可暴擊"},
+    "破城":{"2":"穿透 +15%","3":"對護盾增傷 +30%","5":"無視敵人25%防禦"},
+    "亡者":{"2":"吸血 +8%","3":"擊殺恢復10%生命","5":"每場首次死亡以30%生命復活"},
+    "冰霜":{"2":"技能附加緩速","3":"對緩速敵人增傷20%","5":"控制時間 +50%"},
+    "熔岩":{"2":"技能傷害 +15%","3":"技能暴擊率 +15%","5":"技能暴擊傷害 +50%"},
+    "深淵":{"2":"生命低於50%傷害 +15%","3":"生命越低攻速越高","5":"生命低於30%傷害 +45%"},
+    "魔王":{"2":"全能力 +8%","3":"技能冷卻 -10%","5":"終結技能傷害 +35%"}
+  }
+}
+</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('game-data').textContent);
+const SLOTS={head:"頭",body:"身",feet:"腳",main:"主手",off:"副手"};
+const JOB=Object.fromEntries(DATA.jobs.map(x=>[x.id,x]));
+const RACE=Object.fromEntries(DATA.races.map(x=>[x.id,x]));
+const MAP=Object.fromEntries(DATA.maps.map(x=>[x.id,x]));
+const names={
+  human:{male:["亞倫","凱恩","雷恩","路卡"],female:["愛莉亞","米娜","露西","芙蘭"]},
+  elf:{male:["諾亞","伊萊","希爾","艾爾"],female:["莉芙","希雅","艾琳","露娜"]},
+  beastkin:{male:["雷歐","卡爾","洛克","凱特"],female:["米菈","露可","妮亞","菲娜"]}
+};
+const genderName={male:"男",female:"女"};
+const allCharacters=[];
+for(const r of DATA.races)for(const j of DATA.jobs)for(const g of ["male","female"]){
+  const arr=names[r.id][g],name=arr[(DATA.jobs.indexOf(j)+DATA.races.indexOf(r))%arr.length];
+  allCharacters.push({id:`${r.id}_${j.id}_${g}`,name,race:r.id,job:j.id,gender:g});
+}
+
+const defaultState={
+  gold:300,essence:0,worldClear:0,unlockedMaps:1,currentMap:"slime",stage:1,
+  tiers:Object.fromEntries(DATA.maps.map(m=>[m.id,1])),
+  running:true,speed:1,
+  owned:["human_warrior_female","elf_priest_male","beastkin_mage_female"],
+  party:["human_warrior_female","elf_priest_male","beastkin_mage_female"],
+  inventory:[],equipped:{},battle:null
+};
+let state=loadState(),timer=null;
+function clone(x){return JSON.parse(JSON.stringify(x))}
+function loadState(){try{return {...clone(defaultState),...JSON.parse(localStorage.getItem("game00-full-save")||"{}")}}catch{return clone(defaultState)}}
+function saveState(){localStorage.setItem("game00-full-save",JSON.stringify(state))}
+function getChar(id){return allCharacters.find(x=>x.id===id)}
+function jobOf(c){return JOB[c.job]} function raceOf(c){return RACE[c.race]}
+function addLog(t,cls=""){const el=document.getElementById("battleLog"),d=document.createElement("div");d.textContent=t;d.className=cls;el.appendChild(d);while(el.children.length>250)el.removeChild(el.firstChild);el.scrollTop=el.scrollHeight}
+function rand(a){return a[Math.floor(Math.random()*a.length)]}
+function partySlots(){return Math.min(5,3+state.worldClear)}
+function equippedItems(cid){const eq=state.equipped[cid]||{};return Object.values(eq).map(id=>state.inventory.find(i=>i.id===id)).filter(Boolean)}
+function setCounts(cid){const c={};for(const i of equippedItems(cid))c[i.set]=(c[i.set]||0)+1;return c}
+function setTier(n){return n>=5?5:n>=3?3:n>=2?2:0}
+function charStats(c){
+  const j=jobOf(c);let hp=j.hp,atk=j.atk,def=j.def,speed=j.speed,crit=c.job==="rogue"?0.18:0.08;
+  for(const i of equippedItems(c.id)){hp+=i.hp;atk+=i.atk;def+=i.def;speed+=i.speed;crit+=i.crit}
+  for(const [set,n] of Object.entries(setCounts(c.id))){
+    const t=setTier(n);
+    if(set==="史萊姆"&&t>=2)hp*=1.15;
+    if(set==="哥布林"&&t>=2)speed*=1.10;
+    if(set==="狼牙"&&t>=2)crit+=0.10;
+    if(set==="魔王"&&t>=2){hp*=1.08;atk*=1.08;def*=1.08}
+  }
+  return {maxHp:Math.round(hp),atk:Math.round(atk),def:Math.round(def),speed:+speed.toFixed(2),crit:+crit.toFixed(2)}
+}
+function resonance(){
+  const counts={};for(const id of state.party){const c=getChar(id);if(c)counts[c.race]=(counts[c.race]||0)+1}
+  const out=[];for(const [rid,n] of Object.entries(counts)){const t=n>=5?5:n>=3?3:n>=2?2:0;if(t)out.push({race:rid,tier:t,text:RACE[rid].resonance[t]})}
+  return out
+}
+function applyResonance(stats){
+  const rs=resonance();let s={...stats};
+  for(const r of rs){
+    if(r.race==="human"){const p=r.tier===2?.05:r.tier===3?.10:.20;s.maxHp*=1+p;s.atk*=1+p}
+    if(r.race==="elf"){s.speed*=1+(r.tier===2?.08:r.tier===3?.15:.25)}
+    if(r.race==="beastkin"){s.crit+=r.tier===2?.06:.10}
+  }
+  return {maxHp:Math.round(s.maxHp),atk:Math.round(s.atk),def:Math.round(s.def),speed:+s.speed.toFixed(2),crit:+s.crit.toFixed(2)}
+}
+function newBattle(){
+  const map=MAP[state.currentMap],tier=state.tiers[state.currentMap],isElite=state.stage===5,isBoss=state.stage===10;
+  const enemyName=isBoss?map.boss:isElite?map.elite:map.normal;
+  const base=70+DATA.maps.indexOf(map)*45;const scale=(1+(tier-1)*.28)*(1+(state.stage-1)*.09);
+  const enemy={name:enemyName,maxHp:Math.round(base*scale*(isBoss?7:isElite?3:1)),hp:0,atk:Math.round((12+DATA.maps.indexOf(map)*5)*scale*(isBoss?1.8:isElite?1.35:1)),def:Math.round((3+DATA.maps.indexOf(map)*4)*scale),turn:0};
+  enemy.hp=enemy.maxHp;
+  const allies=state.party.map(getChar).filter(Boolean).map(c=>{const s=applyResonance(charStats(c));return {id:c.id,name:c.name,job:c.job,...s,hp:s.maxHp,charge:0,cd:0,alive:true}});
+  state.battle={enemy,allies,time:0,isElite,isBoss};
+  addLog(`${isBoss?"Boss":isElite?"菁英":"普通"}戰鬥開始：${enemyName}。`,"system")
+}
+function damage(attacker,target,raw,crit=false){
+  const dmg=Math.max(1,Math.round(raw-target.def*.45));target.hp=Math.max(0,target.hp-dmg);
+  return dmg
+}
+function reward(){
+  const map=MAP[state.currentMap],tier=state.tiers[state.currentMap];
+  const gold=25+DATA.maps.indexOf(map)*12+tier*8+state.stage*3;state.gold+=gold;addLog(`勝利，獲得 ${gold} 金幣。`,"drop");
+  if(Math.random()<.72){
+    const slot=rand(Object.keys(SLOTS)),set=map.set,q=1+Math.floor(Math.random()*3)+Math.floor(tier/3);
+    const item={id:"eq_"+Date.now()+"_"+Math.random().toString(36).slice(2),name:`${set}${SLOTS[slot]}`,set,slot,
+      hp:["head","body","off"].includes(slot)?Math.round((8+q*6)*(1+tier*.14)):Math.floor(q*2),
+      atk:slot==="main"?Math.round((5+q*5)*(1+tier*.13)):Math.floor(q*1.5),
+      def:["body","head"].includes(slot)?2+q*2:0,speed:slot==="feet"?q*.02:0,crit:slot==="main"?q*.006:0};
+    state.inventory.push(item);addLog(`掉落「${item.name}」｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}`,"drop")
+  }
+  state.stage++;
+  if(state.stage>10){
+    state.stage=1;state.tiers[state.currentMap]++;
+    addLog(`${map.name} 提升至 Tier ${state.tiers[state.currentMap]}。`,"system");
+    const idx=DATA.maps.findIndex(m=>m.id===state.currentMap);
+    if(idx+1>state.unlockedMaps-1 && state.unlockedMaps<DATA.maps.length){state.unlockedMaps++;addLog(`解鎖新地圖：${DATA.maps[state.unlockedMaps-1].name}。`,"system")}
+    if(idx===DATA.maps.length-1){
+      state.worldClear++;addLog(`完成世界周回 ${state.worldClear}！上陣欄位現在為 ${partySlots()}。`,"system")
+    }
+  }
+  saveState();state.battle=null;renderAll();setTimeout(newBattle,350)
+}
+function lose(){
+  addLog("隊伍全滅，本關重新挑戰。","death");state.battle=null;saveState();renderAll();setTimeout(newBattle,700)
+}
+function stepBattle(){
+  if(!state.running)return;if(!state.battle)newBattle();
+  const b=state.battle;b.time+=.5;
+  for(const a of b.allies){
+    if(!a.alive)continue;a.cd-=.5;a.turn=(a.turn||0)+a.speed*.5;
+    if(a.cd<=0){
+      const c=getChar(a.id),j=jobOf(c);a.cd=c.job==="mage"?4.3:5.2;
+      if(c.job==="priest"){
+        const t=b.allies.filter(x=>x.alive).sort((x,y)=>x.hp/x.maxHp-y.hp/y.maxHp)[0];
+        const h=Math.round(a.atk*2.4);t.hp=Math.min(t.maxHp,t.hp+h);a.charge+=h;
+        addLog(`${a.name} 使用「${j.cdSkill}」，${t.name} 恢復 ${h} 點生命。`,"heal")
+      }else if(c.job==="paladin"){
+        a.hp=Math.min(a.maxHp,a.hp+Math.round(a.maxHp*.12));addLog(`${a.name} 使用「${j.cdSkill}」，獲得護盾。`,"skill")
+      }else{
+        const crit=Math.random()<a.crit,d=damage(a,b.enemy,a.atk*(c.job==="mage"?2.2:1.8)*(crit?1.7:1),crit);
+        addLog(`${a.name} 使用「${j.cdSkill}」，對 ${b.enemy.name} 造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"skill");
+        a.charge++
+      }
+    }else if(a.turn>=1){
+      a.turn=0;const crit=Math.random()<a.crit,d=damage(a,b.enemy,a.atk*(crit?1.7:1),crit);
+      addLog(`${a.name} 普通攻擊 ${b.enemy.name}，造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"damage");a.charge++
+    }
+    const threshold={warrior:5,paladin:6,priest:a.atk*10,mage:3,rogue:2,hunter:4,warlock:6}[a.job];
+    if(a.charge>=threshold){
+      a.charge=0;const c=getChar(a.id),j=jobOf(c);
+      if(a.job==="priest"){
+        for(const t of b.allies.filter(x=>x.alive)){const h=Math.round(a.atk*1.6);t.hp=Math.min(t.maxHp,t.hp+h)}
+        addLog(`${a.name} 施放「${j.triggerSkill}」，治療全隊。`,"heal")
+      }else{
+        const mult={warrior:3.2,paladin:1.5,mage:4.2,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3;
+        const crit=a.job==="rogue"||Math.random()<a.crit,d=damage(a,b.enemy,a.atk*mult*(crit?1.6:1),crit);
+        addLog(`${a.name} 觸發「${j.triggerSkill}」，造成 ${d} 點傷害。`,"skill")
+      }
+    }
+    if(b.enemy.hp<=0){reward();return}
+  }
+  b.enemy.turn+=.55;
+  if(b.enemy.turn>=1){
+    b.enemy.turn=0;const targets=b.allies.filter(x=>x.alive);if(!targets.length){lose();return}
+    const t=rand(targets),d=damage(b.enemy,t,b.enemy.atk);
+    t.charge+=(t.job==="warrior"||t.job==="paladin")?1:0;
+    addLog(`${b.enemy.name} 攻擊 ${t.name}，造成 ${d} 點傷害。`,"");
+    if(t.hp<=0){t.alive=false;addLog(`${t.name} 死亡。`,"death")}
+    if(!b.allies.some(x=>x.alive)){lose();return}
+  }
+  renderBattleStatus()
+}
+function renderBattleStatus(){
+  const el=document.getElementById("battleStatus");if(!state.battle){el.innerHTML="準備下一場戰鬥…";return}
+  const b=state.battle;
+  let h=`<div class="card"><div class="row"><span class="name bad">${b.enemy.name}</span><span>${b.enemy.hp}/${b.enemy.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${100*b.enemy.hp/b.enemy.maxHp}%"></div></div></div>`;
+  for(const a of b.allies)h+=`<div class="card"><div class="row"><span>${a.name}・${JOB[a.job].name}</span><span>${a.alive?a.hp:0}/${a.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${a.alive?100*a.hp/a.maxHp:0}%"></div></div></div>`;
+  el.innerHTML=h
+}
+function equip(itemId,cid){
+  const i=state.inventory.find(x=>x.id===itemId);if(!i)return;state.equipped[cid]||={};state.equipped[cid][i.slot]=itemId;saveState();renderAll()
+}
+function toggleParty(id){
+  const i=state.party.indexOf(id);if(i>=0)state.party.splice(i,1);else if(state.party.length<partySlots())state.party.push(id);
+  state.battle=null;saveState();renderAll()
+}
+function summon(){
+  if(state.gold<100){document.getElementById("summonResult").textContent="金幣不足。";return}
+  state.gold-=100;const c=rand(allCharacters);
+  if(state.owned.includes(c.id)){state.essence++;document.getElementById("summonResult").textContent=`重複：${c.name}（${RACE[c.race].name}・${JOB[c.job].name}・${genderName[c.gender]}）→ 英雄精華+1`}
+  else{state.owned.push(c.id);document.getElementById("summonResult").textContent=`新角色：${c.name}（${RACE[c.race].name}・${JOB[c.job].name}・${genderName[c.gender]}）`}
+  saveState();renderAll()
+}
+function selectMap(id){state.currentMap=id;state.stage=1;state.battle=null;saveState();renderAll();addLog(`前往 ${MAP[id].name}。`,"system")}
+function renderAll(){
+  const map=MAP[state.currentMap];
+  mapName.textContent=map.name;tier.textContent=state.tiers[state.currentMap];stage.textContent=state.stage;gold.textContent=state.gold;essence.textContent=state.essence;worldClear.textContent=state.worldClear;
+  statusLine.textContent=state.running?`自動戰鬥中（${state.speed}x）`:"已暫停";toggleBtn.textContent=state.running?"暫停":"繼續";speedBtn.textContent=`${state.speed}x`;
+  partySummary.textContent=state.party.map(id=>getChar(id)?.name).filter(Boolean).join("、")||"無";
+  enemySummary.textContent=state.battle?state.battle.enemy.name:`${state.stage===10?map.boss:state.stage===5?map.elite:map.normal}｜特性：${map.trait}`;
+
+  partySlotsEl=document.getElementById("partySlots");partySlotsEl.textContent=`${state.party.length}/${partySlots()}`;
+  partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),s=applyResonance(charStats(c)),eq=equippedItems(id);
+    return `<div class="card"><div class="row"><div><span class="name">${n+1}. ${c.name}</span><div class="small">${RACE[c.race].name}・${JOB[c.job].name}・${genderName[c.gender]}</div></div><button class="btn danger" onclick="toggleParty('${id}')">下陣</button></div>
+    <div class="small">HP ${s.maxHp}｜攻擊 ${s.atk}｜防禦 ${s.def}｜攻速 ${s.speed}｜暴率 ${Math.round(s.crit*100)}%</div>
+    <div class="small">${eq.length?eq.map(i=>`${SLOTS[i.slot]}:${i.name}`).join("｜"):"尚未裝備"}</div></div>`}).join("");
+  const rs=resonance();resonanceBox.innerHTML=`種族共鳴：${rs.length?rs.map(x=>`<span class="badge">${RACE[x.race].name}${x.tier}｜${x.text}</span>`).join(""):"無"}`;
+  rosterList.innerHTML=state.owned.map(getChar).filter(Boolean).map(c=>{const on=state.party.includes(c.id);
+    return `<div class="card row"><div><span class="name">${c.name}</span><div class="small">${RACE[c.race].name}・${JOB[c.job].name}・${genderName[c.gender]}</div></div><button class="btn ${on?"danger":"primary"}" onclick="toggleParty('${c.id}')" ${!on&&state.party.length>=partySlots()?"disabled":""}>${on?"下陣":"上陣"}</button></div>`}).join("");
+
+  bagCount.textContent=state.inventory.length;bagList.innerHTML=state.inventory.length?state.inventory.map(i=>`<div class="card">
+    <div class="accent">${i.name}</div><div class="small">${i.set}套｜${SLOTS[i.slot]}</div>
+    <div>攻擊+${i.atk}　生命+${i.hp}　防禦+${i.def}　攻速+${i.speed.toFixed(2)}　暴率+${(i.crit*100).toFixed(1)}%</div>
+    <div class="grid2" style="margin-top:7px"><select id="sel_${i.id}">${state.party.map(id=>`<option value="${id}">${getChar(id).name}</option>`).join("")}</select>
+    <button class="btn" onclick="equip('${i.id}',document.getElementById('sel_${i.id}').value)">裝備</button></div></div>`).join(""):`<div class="small">尚無裝備，先去戰鬥。</div>`;
+
+  mapList.innerHTML=DATA.maps.map((m,idx)=>`<div class="card"><div class="row"><div><span class="name">${idx+1}. ${m.name}</span><div class="small">怪物：${m.normal}／${m.elite}／${m.boss}</div><div class="small">特性：${m.trait}｜掉落：${m.set}套（${m.setRole}）｜Tier ${state.tiers[m.id]}</div></div>
+    <button class="btn ${state.currentMap===m.id?"primary":""}" onclick="selectMap('${m.id}')" ${idx>=state.unlockedMaps?"disabled":""}>${idx>=state.unlockedMaps?"未解鎖":state.currentMap===m.id?"目前":"前往"}</button></div></div>`).join("");
+  renderBattleStatus()
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById(b.dataset.page).classList.add("active")});
+toggleBtn.onclick=()=>{state.running=!state.running;saveState();renderAll()};
+speedBtn.onclick=()=>{state.speed=state.speed===1?2:state.speed===2?5:1;saveState();restartTimer();renderAll()};
+summonBtn.onclick=summon;
+exportBtn.onclick=()=>saveText.value=JSON.stringify(state,null,2);
+importBtn.onclick=()=>{try{state={...clone(defaultState),...JSON.parse(saveText.value)};state.battle=null;saveState();renderAll();alert("匯入成功")}catch{alert("存檔格式錯誤")}};
+resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem("game00-full-save");state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
+dataPreview.textContent=JSON.stringify(DATA,null,2);
+function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(100,650/state.speed))}
+renderAll();addLog("完整文字原型啟動。","system");restartTimer();
+</script>
+</body>
+</html>
