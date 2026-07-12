@@ -251,16 +251,53 @@ function applyResonance(stats){
   }
   return {maxHp:Math.round(s.maxHp),atk:Math.round(s.atk),def:Math.round(s.def),speed:+s.speed.toFixed(2),crit:+s.crit.toFixed(2)}
 }
-function newBattle(){
-  const map=MAP[state.currentMap],tier=state.tiers[state.currentMap],isElite=state.stage===5,isBoss=state.stage===10;
-  const enemyName=isBoss?map.boss:isElite?map.elite:map.normal;
-  const base=70+DATA.maps.indexOf(map)*45;const scale=(1+(tier-1)*.28)*(1+(state.stage-1)*.09);
-  const enemy={name:enemyName,maxHp:Math.round(base*scale*(isBoss?7:isElite?3:1)),hp:0,atk:Math.round((12+DATA.maps.indexOf(map)*5)*scale*(isBoss?1.8:isElite?1.35:1)),def:Math.round((3+DATA.maps.indexOf(map)*4)*scale),turn:0};
+
+function createEnemy(name,type,index,map,tier){
+  const mapIndex=DATA.maps.indexOf(map);
+  const base=70+mapIndex*45;
+  const stageScale=1+(state.stage-1)*.09;
+  const tierScale=1+(tier-1)*.28;
+  const typeHp={normal:1,elite:3,boss:7}[type];
+  const typeAtk={normal:1,elite:1.35,boss:1.8}[type];
+  const typeDef={normal:1,elite:1.35,boss:1.7}[type];
+  const scale=stageScale*tierScale;
+  const enemy={
+    id:`${type}_${index}`,
+    name,
+    type,
+    maxHp:Math.round(base*scale*typeHp),
+    hp:0,
+    atk:Math.round((12+mapIndex*5)*scale*typeAtk),
+    def:Math.round((3+mapIndex*4)*scale*typeDef),
+    turn:0,
+    alive:true
+  };
   enemy.hp=enemy.maxHp;
-  const allies=state.party.map(getChar).filter(Boolean).map(c=>{const s=applyResonance(charStats(c));return {id:c.id,name:c.name,job:c.job,...s,hp:s.maxHp,charge:0,cd:0,alive:true}});
-  state.battle={enemy,allies,time:0,isElite,isBoss};
-  addLog(`${isBoss?"Boss":isElite?"菁英":"普通"}戰鬥開始：${enemyName}。`,"system")
+  return enemy;
 }
+function newBattle(){
+  const map=MAP[state.currentMap],tier=state.tiers[state.currentMap];
+  const enemies=[
+    createEnemy(`${map.normal} A`,"normal",1,map,tier),
+    createEnemy(`${map.normal} B`,"normal",2,map,tier),
+    createEnemy(`${map.normal} C`,"normal",3,map,tier)
+  ];
+  if(state.stage===5){
+    enemies.push(createEnemy(map.elite,"elite",4,map,tier));
+  }
+  if(state.stage===10){
+    enemies.push(createEnemy(map.elite,"elite",4,map,tier));
+    enemies.push(createEnemy(map.boss,"boss",5,map,tier));
+  }
+  const allies=state.party.map(getChar).filter(Boolean).map(c=>{
+    const s=applyResonance(charStats(c));
+    return {id:c.id,name:c.name,job:c.job,...s,hp:s.maxHp,charge:0,cd:0,turn:0,alive:true};
+  });
+  state.battle={enemies,allies,time:0};
+  const encounter=state.stage===10?"Boss戰":state.stage===5?"菁英戰":"普通戰";
+  addLog(`${encounter}開始：${enemies.map(e=>e.name).join("、")}。`,"system");
+}
+
 function damage(attacker,target,raw,crit=false){
   const dmg=Math.max(1,Math.round(raw-target.def*.45));target.hp=Math.max(0,target.hp-dmg);
   return dmg
@@ -268,13 +305,24 @@ function damage(attacker,target,raw,crit=false){
 function reward(){
   const map=MAP[state.currentMap],tier=state.tiers[state.currentMap];
   const gold=25+DATA.maps.indexOf(map)*12+tier*8+state.stage*3;state.gold+=gold;addLog(`勝利，獲得 ${gold} 金幣。`,"drop");
-  if(Math.random()<.72){
+  if(Math.random()<.01){
     const slot=rand(Object.keys(SLOTS)),set=map.set,q=1+Math.floor(Math.random()*3)+Math.floor(tier/3);
     const item={id:"eq_"+Date.now()+"_"+Math.random().toString(36).slice(2),name:`${set}${SLOTS[slot]}`,set,slot,
       hp:["head","body","off"].includes(slot)?Math.round((8+q*6)*(1+tier*.14)):Math.floor(q*2),
       atk:slot==="main"?Math.round((5+q*5)*(1+tier*.13)):Math.floor(q*1.5),
       def:["body","head"].includes(slot)?2+q*2:0,speed:slot==="feet"?q*.02:0,crit:slot==="main"?q*.006:0};
-    state.inventory.push(item);addLog(`掉落「${item.name}」｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}`,"drop")
+
+    const sameNameCount=state.inventory.filter(x=>x.name===item.name).length;
+    const keepLimit=state.owned.length+2;
+
+    if(sameNameCount>=keepLimit){
+      const recycleGold=Math.max(5,Math.round((item.atk*2)+(item.hp*.35)+(item.def*3)+(item.speed*100)+(item.crit*500)));
+      state.gold+=recycleGold;
+      addLog(`「${item.name}」已達保留上限 ${keepLimit} 件，自動換成 ${recycleGold} 金幣。`,"drop");
+    }else{
+      state.inventory.push(item);
+      addLog(`掉落「${item.name}」｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}`,"drop");
+    }
   }
   state.stage++;
   if(state.stage>10){
@@ -291,60 +339,125 @@ function reward(){
 function lose(){
   addLog("隊伍全滅，本關重新挑戰。","death");state.battle=null;saveState();renderAll();setTimeout(newBattle,700)
 }
+
+function livingEnemies(b){return b.enemies.filter(e=>e.alive&&e.hp>0)}
+function markEnemyDeath(enemy){
+  if(enemy.hp<=0&&enemy.alive){
+    enemy.alive=false;
+    addLog(`${enemy.name} 死亡。`,"death");
+  }
+}
+function chooseEnemy(b){return rand(livingEnemies(b))}
 function stepBattle(){
-  if(!state.running)return;if(!state.battle)newBattle();
-  const b=state.battle;b.time+=.5;
+  if(!state.running)return;
+  if(!state.battle)newBattle();
+  const b=state.battle;
+  b.time+=.5;
+
   for(const a of b.allies){
-    if(!a.alive)continue;a.cd-=.5;a.turn=(a.turn||0)+a.speed*.5;
+    if(!a.alive)continue;
+    a.cd-=.5;
+    a.turn+=a.speed*.5;
+  }
+
+  const actingAllies=b.allies.filter(a=>a.alive&&(a.cd<=0||a.turn>=1));
+  if(actingAllies.length&&livingEnemies(b).length){
+    const a=rand(actingAllies);
+    const c=getChar(a.id),j=jobOf(c);
+
     if(a.cd<=0){
-      const c=getChar(a.id),j=jobOf(c);a.cd=c.job==="mage"?4.3:5.2;
+      a.cd=c.job==="mage"?4.3:5.2;
       if(c.job==="priest"){
         const t=b.allies.filter(x=>x.alive).sort((x,y)=>x.hp/x.maxHp-y.hp/y.maxHp)[0];
-        const h=Math.round(a.atk*2.4);t.hp=Math.min(t.maxHp,t.hp+h);a.charge+=h;
-        addLog(`${a.name} 使用「${j.cdSkill}」，${t.name} 恢復 ${h} 點生命。`,"heal")
+        const h=Math.round(a.atk*2.4);
+        t.hp=Math.min(t.maxHp,t.hp+h);
+        a.charge+=h;
+        addLog(`${a.name} 使用「${j.cdSkill}」，${t.name} 恢復 ${h} 點生命。`,"heal");
       }else if(c.job==="paladin"){
-        a.hp=Math.min(a.maxHp,a.hp+Math.round(a.maxHp*.12));addLog(`${a.name} 使用「${j.cdSkill}」，獲得護盾。`,"skill")
+        a.hp=Math.min(a.maxHp,a.hp+Math.round(a.maxHp*.12));
+        addLog(`${a.name} 使用「${j.cdSkill}」，獲得護盾。`,"skill");
       }else{
-        const crit=Math.random()<a.crit,d=damage(a,b.enemy,a.atk*(c.job==="mage"?2.2:1.8)*(crit?1.7:1),crit);
-        addLog(`${a.name} 使用「${j.cdSkill}」，對 ${b.enemy.name} 造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"skill");
-        a.charge++
+        const target=chooseEnemy(b);
+        const crit=Math.random()<a.crit;
+        const d=damage(a,target,a.atk*(c.job==="mage"?2.2:1.8)*(crit?1.7:1),crit);
+        addLog(`${a.name} 使用「${j.cdSkill}」，對 ${target.name} 造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"skill");
+        a.charge++;
+        markEnemyDeath(target);
       }
-    }else if(a.turn>=1){
-      a.turn=0;const crit=Math.random()<a.crit,d=damage(a,b.enemy,a.atk*(crit?1.7:1),crit);
-      addLog(`${a.name} 普通攻擊 ${b.enemy.name}，造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"damage");a.charge++
+    }else{
+      a.turn=0;
+      const target=chooseEnemy(b);
+      const crit=Math.random()<a.crit;
+      const d=damage(a,target,a.atk*(crit?1.7:1),crit);
+      addLog(`${a.name} 普通攻擊 ${target.name}，造成 ${d} 點傷害${crit?"（暴擊）":""}。`,"damage");
+      a.charge++;
+      markEnemyDeath(target);
     }
+
     const threshold={warrior:5,paladin:6,priest:a.atk*10,mage:3,rogue:2,hunter:4,warlock:6}[a.job];
-    if(a.charge>=threshold){
-      a.charge=0;const c=getChar(a.id),j=jobOf(c);
+    if(a.charge>=threshold&&livingEnemies(b).length){
+      a.charge=0;
       if(a.job==="priest"){
-        for(const t of b.allies.filter(x=>x.alive)){const h=Math.round(a.atk*1.6);t.hp=Math.min(t.maxHp,t.hp+h)}
-        addLog(`${a.name} 施放「${j.triggerSkill}」，治療全隊。`,"heal")
+        for(const t of b.allies.filter(x=>x.alive)){
+          const h=Math.round(a.atk*1.6);
+          t.hp=Math.min(t.maxHp,t.hp+h);
+        }
+        addLog(`${a.name} 施放「${j.triggerSkill}」，治療全隊。`,"heal");
       }else{
+        const target=chooseEnemy(b);
         const mult={warrior:3.2,paladin:1.5,mage:4.2,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3;
-        const crit=a.job==="rogue"||Math.random()<a.crit,d=damage(a,b.enemy,a.atk*mult*(crit?1.6:1),crit);
-        addLog(`${a.name} 觸發「${j.triggerSkill}」，造成 ${d} 點傷害。`,"skill")
+        const crit=a.job==="rogue"||Math.random()<a.crit;
+        const d=damage(a,target,a.atk*mult*(crit?1.6:1),crit);
+        addLog(`${a.name} 觸發「${j.triggerSkill}」，對 ${target.name} 造成 ${d} 點傷害。`,"skill");
+        markEnemyDeath(target);
       }
     }
-    if(b.enemy.hp<=0){reward();return}
   }
-  b.enemy.turn+=.55;
-  if(b.enemy.turn>=1){
-    b.enemy.turn=0;const targets=b.allies.filter(x=>x.alive);if(!targets.length){lose();return}
-    const t=rand(targets),d=damage(b.enemy,t,b.enemy.atk);
+
+  if(!livingEnemies(b).length){
+    reward();
+    return;
+  }
+
+  for(const e of livingEnemies(b)){
+    const rate=e.type==="boss"?.30:e.type==="elite"?.38:.48;
+    e.turn+=rate;
+  }
+  const actingEnemies=livingEnemies(b).filter(e=>e.turn>=1);
+  if(actingEnemies.length){
+    const enemy=rand(actingEnemies);
+    enemy.turn=0;
+    const targets=b.allies.filter(x=>x.alive);
+    if(!targets.length){lose();return}
+    const t=rand(targets);
+    const d=damage(enemy,t,enemy.atk);
     t.charge+=(t.job==="warrior"||t.job==="paladin")?1:0;
-    addLog(`${b.enemy.name} 攻擊 ${t.name}，造成 ${d} 點傷害。`,"");
-    if(t.hp<=0){t.alive=false;addLog(`${t.name} 死亡。`,"death")}
+    addLog(`${enemy.name} 攻擊 ${t.name}，造成 ${d} 點傷害。`,"");
+    if(t.hp<=0){
+      t.alive=false;
+      addLog(`${t.name} 死亡。`,"death");
+    }
     if(!b.allies.some(x=>x.alive)){lose();return}
   }
-  renderBattleStatus()
+  renderBattleStatus();
 }
+
+
 function renderBattleStatus(){
-  const el=document.getElementById("battleStatus");if(!state.battle){el.innerHTML="準備下一場戰鬥…";return}
+  const el=document.getElementById("battleStatus");
+  if(!state.battle){el.innerHTML="準備下一場戰鬥…";return}
   const b=state.battle;
-  let h=`<div class="card"><div class="row"><span class="name bad">${b.enemy.name}</span><span>${b.enemy.hp}/${b.enemy.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${100*b.enemy.hp/b.enemy.maxHp}%"></div></div></div>`;
-  for(const a of b.allies)h+=`<div class="card"><div class="row"><span>${a.name}・${JOB[a.job].name}</span><span>${a.alive?a.hp:0}/${a.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${a.alive?100*a.hp/a.maxHp:0}%"></div></div></div>`;
-  el.innerHTML=h
+  let h=`<div class="small accent">敵方（${livingEnemies(b).length}/${b.enemies.length}）</div>`;
+  for(const e of b.enemies){
+    h+=`<div class="card"><div class="row"><span class="name ${e.type==="boss"?"purple":e.type==="elite"?"gold":"bad"}">${e.name}</span><span>${e.alive?e.hp:0}/${e.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${e.alive?100*e.hp/e.maxHp:0}%"></div></div></div>`;
+  }
+  h+=`<div class="small accent">我方</div>`;
+  for(const a of b.allies){
+    h+=`<div class="card"><div class="row"><span>${a.name}・${JOB[a.job].name}</span><span>${a.alive?a.hp:0}/${a.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${a.alive?100*a.hp/a.maxHp:0}%"></div></div></div>`;
+  }
+  el.innerHTML=h;
 }
+
 function equip(itemId,cid){
   const i=state.inventory.find(x=>x.id===itemId);if(!i)return;state.equipped[cid]||={};state.equipped[cid][i.slot]=itemId;saveState();renderAll()
 }
@@ -365,7 +478,7 @@ function renderAll(){
   mapName.textContent=map.name;tier.textContent=state.tiers[state.currentMap];stage.textContent=state.stage;gold.textContent=state.gold;essence.textContent=state.essence;worldClear.textContent=state.worldClear;
   statusLine.textContent=state.running?`自動戰鬥中（${state.speed}x）`:"已暫停";toggleBtn.textContent=state.running?"暫停":"繼續";speedBtn.textContent=`${state.speed}x`;
   partySummary.textContent=state.party.map(id=>getChar(id)?.name).filter(Boolean).join("、")||"無";
-  enemySummary.textContent=state.battle?state.battle.enemy.name:`${state.stage===10?map.boss:state.stage===5?map.elite:map.normal}｜特性：${map.trait}`;
+  enemySummary.textContent=state.battle?state.battle.enemies.map(e=>e.name).join("、"):(state.stage===10?`${map.boss}＋${map.elite}＋3隻${map.normal}`:state.stage===5?`${map.elite}＋3隻${map.normal}`:`3隻${map.normal}`)+`｜特性：${map.trait}`;
 
   partySlotsEl=document.getElementById("partySlots");partySlotsEl.textContent=`${state.party.length}/${partySlots()}`;
   partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),s=applyResonance(charStats(c)),eq=equippedItems(id);
@@ -395,7 +508,7 @@ importBtn.onclick=()=>{try{state={...clone(defaultState),...JSON.parse(saveText.
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem("game00-full-save");state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(100,650/state.speed))}
-renderAll();addLog("完整文字原型啟動。","system");restartTimer();
+renderAll();addLog("完整文字原型 v0.05 啟動。裝備掉落率 1%，同名裝備最多保留已擁有角色數 + 2 件。","system");restartTimer();
 </script>
 </body>
 </html>
