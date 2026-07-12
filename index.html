@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Idle RPG Prototype v0.01</title>
+<style>
+body{
+    background:#111;
+    color:#ddd;
+    font-family:Consolas,monospace;
+    margin:0;
+    padding:18px;
+}
+#top{display:flex;justify-content:space-between;border-bottom:1px solid #444;padding-bottom:8px;margin-bottom:12px;}
+#log{
+    height:70vh;
+    overflow-y:auto;
+    border:1px solid #444;
+    padding:10px;
+    background:#0b0b0b;
+    white-space:pre-wrap;
+}
+button{
+    margin-top:12px;
+    padding:8px 16px;
+    background:#333;
+    color:#fff;
+    border:1px solid #666;
+}
+.damage{color:#ff6b6b}
+.heal{color:#67e480}
+.drop{color:#ffd166}
+.boss{color:#8ecaff}
+</style>
+</head>
+<body>
+
+<div id="top">
+<div>地圖：史萊姆平原　Tier 1　關卡 <span id="stage">1</span>/10</div>
+<div>金幣：<span id="gold">0</span></div>
+</div>
+
+<div id="log"></div>
+
+<button onclick="toggle()">暫停 / 繼續</button>
+
+<script>
+const party=["愛莉亞","諾亞","米菈"];
+const monsters=["史萊姆A","史萊姆B","史萊姆C"];
+let stage=1;
+let gold=0;
+let running=true;
+const log=document.getElementById("log");
+
+function add(text,cls=""){
+    const d=document.createElement("div");
+    if(cls)d.className=cls;
+    d.textContent=text;
+    log.appendChild(d);
+    log.scrollTop=log.scrollHeight;
+    while(log.children.length>300)log.removeChild(log.firstChild);
+}
+
+function rand(a){return a[Math.floor(Math.random()*a.length)]}
+
+function tick(){
+ if(!running)return;
+ const r=Math.random();
+ if(r<0.55){
+   const dmg=Math.floor(Math.random()*40)+10;
+   add(`${rand(party)} 使用技能，對 ${rand(monsters)} 造成 ${dmg} 點傷害`,"damage");
+ }else if(r<0.75){
+   const heal=Math.floor(Math.random()*20)+10;
+   add(`${rand(party)} 恢復 ${heal} 點生命`,"heal");
+ }else if(r<0.93){
+   const dmg=Math.floor(Math.random()*18)+5;
+   add(`${rand(monsters)} 攻擊 ${rand(party)}，造成 ${dmg} 點傷害`);
+ }else{
+   gold+=Math.floor(Math.random()*30)+20;
+   document.getElementById("gold").textContent=gold;
+   add(`戰鬥勝利！獲得 ${gold} 金幣、史萊姆頭盔`,"drop");
+   stage++;
+   if(stage==5)add("=== 菁英怪出現 ===","boss");
+   if(stage==10)add("=== Boss：史萊姆王 ===","boss");
+   if(stage>10){
+      stage=1;
+      add("史萊姆平原 Tier 提升！","boss");
+   }
+   document.getElementById("stage").textContent=stage;
+ }
+}
+function toggle(){running=!running;}
+setInterval(tick,700);
+add("戰鬥開始...");
+</script>
+
+</body>
+</html>
