@@ -215,7 +215,27 @@ const defaultState={
 };
 let state=loadState(),timer=null;
 function clone(x){return JSON.parse(JSON.stringify(x))}
-function loadState(){try{return {...clone(defaultState),...JSON.parse(localStorage.getItem("game00-full-save")||"{}")}}catch{return clone(defaultState)}}
+function loadState(){
+  try{
+    const raw=JSON.parse(localStorage.getItem("game00-full-save")||"{}");
+    const merged={...clone(defaultState),...raw};
+    // 戰鬥中的暫存物件不跨版本保留，避免舊版單體敵人格式造成新版停止運作。
+    merged.battle=null;
+    merged.inventory=Array.isArray(merged.inventory)?merged.inventory:[];
+    merged.owned=Array.isArray(merged.owned)?merged.owned:clone(defaultState.owned);
+    merged.party=Array.isArray(merged.party)?merged.party.filter(id=>merged.owned.includes(id)):clone(defaultState.party);
+    merged.equipped=merged.equipped&&typeof merged.equipped==="object"?merged.equipped:{};
+    merged.tiers={...clone(defaultState.tiers),...(merged.tiers||{})};
+    if(!MAP[merged.currentMap])merged.currentMap="slime";
+    merged.stage=Math.min(10,Math.max(1,Number(merged.stage)||1));
+    merged.running=merged.running!==false;
+    merged.speed=[1,2,5].includes(merged.speed)?merged.speed:1;
+    return merged;
+  }catch(e){
+    console.warn("讀取舊存檔失敗，已使用安全預設值。",e);
+    return clone(defaultState);
+  }
+}
 function saveState(){localStorage.setItem("game00-full-save",JSON.stringify(state))}
 function getChar(id){return allCharacters.find(x=>x.id===id)}
 function jobOf(c){return JOB[c.job]} function raceOf(c){return RACE[c.race]}
@@ -478,7 +498,7 @@ function renderAll(){
   mapName.textContent=map.name;tier.textContent=state.tiers[state.currentMap];stage.textContent=state.stage;gold.textContent=state.gold;essence.textContent=state.essence;worldClear.textContent=state.worldClear;
   statusLine.textContent=state.running?`自動戰鬥中（${state.speed}x）`:"已暫停";toggleBtn.textContent=state.running?"暫停":"繼續";speedBtn.textContent=`${state.speed}x`;
   partySummary.textContent=state.party.map(id=>getChar(id)?.name).filter(Boolean).join("、")||"無";
-  enemySummary.textContent=state.battle?state.battle.enemies.map(e=>e.name).join("、"):(state.stage===10?`${map.boss}＋${map.elite}＋3隻${map.normal}`:state.stage===5?`${map.elite}＋3隻${map.normal}`:`3隻${map.normal}`)+`｜特性：${map.trait}`;
+  enemySummary.textContent=(state.battle&&Array.isArray(state.battle.enemies))?state.battle.enemies.map(e=>e.name).join("、"):(state.stage===10?`${map.boss}＋${map.elite}＋3隻${map.normal}`:state.stage===5?`${map.elite}＋3隻${map.normal}`:`3隻${map.normal}`)+`｜特性：${map.trait}`;
 
   partySlotsEl=document.getElementById("partySlots");partySlotsEl.textContent=`${state.party.length}/${partySlots()}`;
   partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),s=applyResonance(charStats(c)),eq=equippedItems(id);
@@ -508,7 +528,7 @@ importBtn.onclick=()=>{try{state={...clone(defaultState),...JSON.parse(saveText.
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem("game00-full-save");state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(100,650/state.speed))}
-renderAll();addLog("完整文字原型 v0.05 啟動。裝備掉落率 1%，同名裝備最多保留已擁有角色數 + 2 件。","system");restartTimer();
+renderAll();addLog("完整文字原型 v0.05.1 啟動。已修正舊存檔造成戰鬥停止的問題。","system");restartTimer();
 </script>
 </body>
 </html>
