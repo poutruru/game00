@@ -823,11 +823,13 @@ function spriteImg(kind,key,size=48){return `<img class="pix" src="${spriteURL(k
 </script>
 
 <script>
-const GAME_VERSION="v0.13";
+const GAME_VERSION="v0.14";
 document.title=`ruru放置 ${GAME_VERSION}`;
 const DATA=JSON.parse(document.getElementById("game-data").textContent);
 const SAVE_KEY="game00-full-save";
-const SAVE_VERSION=6;
+const SAVE_VERSION=7;
+/* 低於此世代的存檔一律清空重開（要全員重置時把它調成跟 SAVE_VERSION 一樣再一起 +1） */
+const WIPE_BELOW_VERSION=7;
 const SLOTS={head:"頭",body:"身",feet:"腳",main:"主手",off:"副手"};
 const SLOT_FULL={head:"頭",body:"身體",feet:"腳部",main:"主手",off:"副手"};
 const SLOT_ORDER={head:0,body:1,feet:2,main:3,off:4};
@@ -858,6 +860,11 @@ function migrateCharacterId(id){
 function loadState(){
   try{
     const raw=JSON.parse(localStorage.getItem(SAVE_KEY)||"{}");
+    if(Object.keys(raw).length&&(Number(raw.version)||0)<WIPE_BELOW_VERSION){
+      console.warn("存檔世代過舊，全員重置。");
+      localStorage.removeItem(SAVE_KEY);
+      return clone(defaultState);
+    }
     const merged={...clone(defaultState),...raw,version:SAVE_VERSION,battle:null};
     merged.owned=[...new Set((Array.isArray(raw.owned)?raw.owned:defaultState.owned).map(migrateCharacterId).filter(Boolean))];
     if(!merged.owned.length)merged.owned=clone(defaultState.owned);
@@ -1247,7 +1254,7 @@ importBtn.onclick=()=>{try{localStorage.setItem(SAVE_KEY,saveText.value);state=l
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem(SAVE_KEY);state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(110,680/state.speed))}
-renderAll();addLog(`ruru放置 ${GAME_VERSION} 啟動：種族精簡為人類／精靈／獸人；小怪血量大幅提升；暴風雪改為全體範圍技；戰鬥勝利無人陣亡時，新敵人改為從天而降的絲滑過場。`,"system");restartTimer();
+renderAll();addLog(`ruru放置 ${GAME_VERSION} 啟動：配合種族與平衡大改，所有玩家存檔已重置，全員重新開始！`,"system");restartTimer();
 </script>
 </body>
 </html>
