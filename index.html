@@ -74,6 +74,19 @@ summary{cursor:pointer;color:var(--accent)}
 .dmg{position:absolute;left:50%;top:0;transform:translateX(-50%);font-weight:700;font-size:13px;pointer-events:none;animation:rise .7s forwards;text-shadow:0 1px 2px #000;z-index:5}
 .dmg.hurt{color:#ff9c9c}.dmg.crit{color:#ffd166;font-size:16px}.dmg.heal{color:#8fe3a5}
 @keyframes rise{to{transform:translate(-50%,-24px);opacity:0}}
+.equipwrap{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-top:8px}
+.equipwrap>.grow{flex:1;min-width:180px}
+.bodymap{display:block}
+.bm-part{cursor:pointer}
+.bm-part circle,.bm-part rect{fill:#23272a;stroke:#53595d;stroke-width:1.5}
+.bm-part.filled circle,.bm-part.filled rect{fill:#2e3524;stroke:#8b794a}
+.bm-part.sel circle,.bm-part.sel rect{stroke:var(--accent);stroke-width:2.5;fill:#3a3c2c}
+.bodymap text{fill:var(--muted);font-size:10px;text-anchor:middle;pointer-events:none}
+.bm-part.sel text{fill:var(--accent)}
+.slotrow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;cursor:pointer}
+.slotrow.sel{border-color:var(--accent);background:#1a1e20}
+.slotrow .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slotrow .btn{padding:4px 8px;font-size:12px}
 @media(max-width:600px){nav{grid-template-columns:repeat(3,1fr);top:58px}.grid3{grid-template-columns:1fr}}
 </style>
 </head>
@@ -123,6 +136,7 @@ summary{cursor:pointer;color:var(--accent)}
   <div class="panel">
     <div class="row"><strong>上陣隊伍</strong><span class="small">欄位 <span id="partySlots"></span></span></div>
     <div id="partyList"></div>
+    <div id="equipPanel"></div>
     <div id="resonanceBox" class="small"></div>
     <div id="heroSlotBox" class="card small"></div>
   </div>
@@ -813,6 +827,7 @@ const DATA=JSON.parse(document.getElementById("game-data").textContent);
 const SAVE_KEY="game00-full-save";
 const SAVE_VERSION=6;
 const SLOTS={head:"頭",body:"身",feet:"腳",main:"主手",off:"副手"};
+const SLOT_FULL={head:"頭",body:"身體",feet:"腳部",main:"主手",off:"副手"};
 const SLOT_ORDER={head:0,body:1,feet:2,main:3,off:4};
 const JOB=Object.fromEntries(DATA.jobs.map(x=>[x.id,x]));
 const RACE=Object.fromEntries(DATA.races.map(x=>[x.id,x]));
@@ -1059,6 +1074,47 @@ function updateItemCompare(itemId,cid){
   const parts=metrics.map(([name,a,b,d])=>{const diff=+(b-a).toFixed(d);if(!diff)return `<span class="small">${name} ±0</span>`;return `<span class="${diff>0?"good":"bad"}">${diff>0?"增加":"減少"} ${Math.abs(diff).toFixed(d)} ${name}</span>`});
   box.innerHTML=parts.join("｜");
 }
+const ui={equipChar:null,equipSlot:null};
+function openEquip(id){ui.equipChar=ui.equipChar===id?null:id;if(ui.equipChar&&!ui.equipSlot)ui.equipSlot="head";renderAll();if(ui.equipChar){const el=document.getElementById("equipPanel");if(el)el.scrollIntoView({behavior:"smooth",block:"nearest"})}}
+function selectSlot(slot){ui.equipSlot=slot;renderAll()}
+function unequip(cid,slot){const eq=state.equipped[cid];if(eq&&eq[slot]){delete eq[slot];state.battle=null;saveState();renderAll()}}
+function slotItemOf(cid,slot){const id=(state.equipped[cid]||{})[slot];return state.inventory.find(i=>i.id===id)||null}
+function statDiffHTML(c,item){
+  const before=effectiveStats(c),after=effectiveStats(c,item);
+  const metrics=[["生命",before.maxHp,after.maxHp,0],["攻擊",before.atk,after.atk,0],["防禦",before.def,after.def,0],["攻速",before.speed,after.speed,2],["暴率",before.crit*100,after.crit*100,1]];
+  return metrics.map(([name,a,b,d])=>{const diff=+(b-a).toFixed(d);if(!diff)return `<span class="small">${name}±0</span>`;return `<span class="${diff>0?"good":"bad"}">${name}${diff>0?"+":""}${diff.toFixed(d)}</span>`}).join("｜");
+}
+function bodyMapHTML(cid){
+  const cls=slot=>`bm-part${slotItemOf(cid,slot)?" filled":""}${ui.equipSlot===slot?" sel":""}`;
+  const on=slot=>`onclick="selectSlot('${slot}')"`;
+  return `<svg class="bodymap" viewBox="0 0 190 150" width="190" height="150">
+    <g class="${cls("head")}" ${on("head")}><circle cx="95" cy="25" r="17"/><text x="95" y="29">頭</text></g>
+    <g class="${cls("main")}" ${on("main")}><rect x="36" y="52" width="32" height="36" rx="7"/><text x="52" y="74">主手</text></g>
+    <g class="${cls("body")}" ${on("body")}><rect x="74" y="48" width="42" height="46" rx="7"/><text x="95" y="75">身體</text></g>
+    <g class="${cls("off")}" ${on("off")}><rect x="122" y="52" width="32" height="36" rx="7"/><text x="138" y="74">副手</text></g>
+    <g class="${cls("feet")}" ${on("feet")}><rect x="76" y="99" width="17" height="42" rx="5"/><rect x="97" y="99" width="17" height="42" rx="5"/><text x="95" y="124">腳部</text></g>
+  </svg>`;
+}
+function renderEquipPanel(){
+  const box=document.getElementById("equipPanel");
+  if(ui.equipChar&&!state.party.includes(ui.equipChar)){ui.equipChar=null}
+  if(!ui.equipChar){box.innerHTML="";return}
+  const cid=ui.equipChar,c=getChar(cid);
+  const slotRows=Object.keys(SLOTS).map(slot=>{
+    const item=slotItemOf(cid,slot);
+    return `<div class="slotrow${ui.equipSlot===slot?" sel":""}" onclick="selectSlot('${slot}')"><span class="small" style="min-width:34px">${SLOT_FULL[slot]}</span><span class="grow">${item?`<span class="accent">${item.name}</span>`:`<span class="small">（空）</span>`}</span>${item?`<button class="btn" onclick="event.stopPropagation();unequip('${cid}','${slot}')">卸下</button>`:""}</div>`;
+  }).join("");
+  let candHTML="";
+  if(ui.equipSlot){
+    const items=state.inventory.filter(i=>i.slot===ui.equipSlot).sort((a,b)=>a.set.localeCompare(b.set)||a.name.localeCompare(b.name));
+    candHTML=`<hr><div class="small">「${SLOT_FULL[ui.equipSlot]}」可配戴的裝備（${items.length} 件）</div>`+(items.length?items.map(item=>{
+      const wearer=findWearer(item.id),isMine=wearer===cid;
+      const wearTag=isMine?`<span class="good">此角色配戴中</span>`:wearer?`<span class="gold">配戴中：${label(getChar(wearer))}</span>`:`<span class="small">未配戴</span>`;
+      return `<div class="card"><div class="row"><div class="grow"><span class="accent">${item.name}</span> <span class="small">${item.set}套</span><div class="small">攻擊+${item.atk}　生命+${item.hp}　防禦+${item.def}　攻速+${Number(item.speed).toFixed(2)}　暴率+${(Number(item.crit)*100).toFixed(1)}%</div><div class="small">${statDiffHTML(c,item)}</div><div class="small">${wearTag}</div></div><button class="btn primary" onclick="equip('${item.id}','${cid}')" ${isMine?"disabled":""}>${wearer&&!isMine?"換裝":"裝備"}</button></div></div>`;
+    }).join(""):`<div class="small" style="margin-top:6px">背包中沒有此部位的裝備，先去戰鬥收集吧。</div>`);
+  }
+  box.innerHTML=`<hr><div class="row"><strong>裝備檢視：${label(c)}</strong><button class="btn" onclick="openEquip('${cid}')">關閉</button></div><div class="equipwrap"><div>${bodyMapHTML(cid)}</div><div class="grow">${slotRows}</div></div>${candHTML}`;
+}
 function toggleParty(id){const index=state.party.indexOf(id);if(index>=0)state.party.splice(index,1);else if(state.party.length<partySlots())state.party.push(id);state.battle=null;saveState();renderAll()}
 function summonOnce(){
   const c=rand(allCharacters);
@@ -1098,7 +1154,8 @@ function renderAll(){
   partySummary.textContent=state.party.map(id=>{const c=getChar(id);return `${label(c)} Lv.${progressOf(id).level}`}).join("、")||"無";
   enemySummary.textContent=state.battle?state.battle.enemies.map(e=>e.name).join("、"):(state.stage===10?`${map.boss}＋${map.elite}＋3隻${map.normal}`:state.stage===5?`${map.elite}＋3隻${map.normal}`:`3隻${map.normal}`)+`｜特性：${map.trait}`;
   document.getElementById("partySlots").textContent=`${state.party.length}/${partySlots()}`;
-  partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),p=progressOf(id),s=effectiveStats(c),items=equippedItems(id);return `<div class="card"><div class="cardrow"><div>${spriteImg("char",id,44)}</div><div class="grow"><div class="row"><div><span class="name">${n+1}. ${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div><button class="btn danger" onclick="toggleParty('${id}')">下陣</button></div></div></div><div class="small">HP ${s.maxHp}｜攻擊 ${s.atk}｜防禦 ${s.def}｜攻速 ${s.speed}｜暴率 ${(s.crit*100).toFixed(1)}%</div><div class="small">${items.length?items.sort((a,b)=>SLOT_ORDER[a.slot]-SLOT_ORDER[b.slot]).map(i=>`${SLOTS[i.slot]}:${i.name}`).join("｜"):"尚未裝備"}</div></div>`}).join("");
+  partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),p=progressOf(id),s=effectiveStats(c);const eqLine=Object.keys(SLOTS).map(slot=>{const it=slotItemOf(id,slot);return `${SLOT_FULL[slot]}：${it?`<span class="accent">${it.name}</span>`:`<span style="opacity:.45">無</span>`}`}).join("　");return `<div class="card"><div class="cardrow"><div>${spriteImg("char",id,44)}</div><div class="grow"><div class="row"><div><span class="name">${n+1}. ${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div><div class="wrap"><button class="btn ${ui.equipChar===id?"primary":""}" onclick="openEquip('${id}')">裝備</button><button class="btn danger" onclick="toggleParty('${id}')">下陣</button></div></div></div></div><div class="small">HP ${s.maxHp}｜攻擊 ${s.atk}｜防禦 ${s.def}｜攻速 ${s.speed}｜暴率 ${(s.crit*100).toFixed(1)}%</div><div class="small">${eqLine}</div></div>`}).join("");
+  renderEquipPanel();
   const rs=resonance();resonanceBox.innerHTML=`種族共鳴：${rs.length?rs.map(x=>`<span class="badge">${RACE[x.race].name}${x.tier}｜${x.text}</span>`).join(""):"無"}`;
   heroSlotBox.innerHTML=heroSlotUnlocked()?`<span class="accent">英雄槽：空</span><br>已解鎖；英雄卡池尚未置入。`:`英雄槽：未解鎖（完成第 3 周目開啟）`;
   rosterList.innerHTML=state.owned.map(getChar).filter(Boolean).map(c=>{const on=state.party.includes(c.id),p=progressOf(c.id);return `<div class="card row"><div class="cardrow">${spriteImg("char",c.id,36)}<div><span class="name">${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div></div><button class="btn ${on?"danger":"primary"}" onclick="toggleParty('${c.id}')" ${!on&&state.party.length>=partySlots()?"disabled":""}>${on?"下陣":"上陣"}</button></div>`}).join("");
@@ -1123,7 +1180,7 @@ importBtn.onclick=()=>{try{localStorage.setItem(SAVE_KEY,saveText.value);state=l
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem(SAVE_KEY);state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(110,680/state.speed))}
-renderAll();addLog("像素原型 v0.07 啟動：新增像素角色戰鬥場景、傷害飄字、10 連召募、精華交換；掉寶率上調（普通10%／菁英35%／Boss必掉）；修正觸發技能永不發動的問題。","system");restartTimer();
+renderAll();addLog("像素原型 v0.08 啟動：隊伍頁新增裝備檢視——人體部位圖（頭／身體／腳部／主手／副手），點部位可瀏覽並換裝，已被其他角色配戴的裝備會顯示配戴者且可直接換給目前角色。","system");restartTimer();
 </script>
 </body>
 </html>
