@@ -1,6 +1,8 @@
-# game00 — 像素放置 RPG 原型
+# ruru放置 — 像素放置 RPG（v0.12）
 
-單一 `index.html` 即可遊玩（直接用瀏覽器開啟），存檔在 localStorage。
+線上遊玩：https://poutruru.github.io/game00/
+
+單一 `index.html` 即可遊玩（直接用瀏覽器開啟），存檔在 localStorage。角色原圖放 `art/`（放大像素圖 PNG 會轉成 48×48 內嵌），BGM/音效放 `audio/`。
 
 ## 核心系統
 - 6 種族 × 7 職業 = 42 名角色，種族共鳴 + 職業技能（CD 技 / 觸發技）
