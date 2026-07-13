@@ -75,6 +75,8 @@ summary{cursor:pointer;color:var(--accent)}
 .unit.hit .ubox{animation:shake .3s}
 @keyframes lungeUp{30%{transform:translateY(-9px) scale(1.07)}}
 @keyframes lungeDown{30%{transform:translateY(9px) scale(1.07)}}
+.unit.enemy.drop{animation:dropIn .55s cubic-bezier(.25,.9,.35,1.15) backwards}
+@keyframes dropIn{0%{transform:translateY(-72px);opacity:0}65%{transform:translateY(5px);opacity:1}100%{transform:translateY(0);opacity:1}}
 @keyframes shake{20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
 .unit .uhp{height:6px;background:#2c3036cc;border:1px solid #22252b;border-radius:3px;margin:3px 6px 0;overflow:hidden}
 .unit .usk{height:4px;background:#2c3036cc;border:1px solid #22252b;border-radius:2px;margin:2px 10px 0;overflow:hidden}
@@ -220,15 +222,6 @@ summary{cursor:pointer;color:var(--accent)}
       }
     },
     {
-      "id": "demon",
-      "name": "魔族",
-      "resonance": {
-        "2": "技能傷害 +15%",
-        "3": "對生命低於50%的敵人傷害 +25%",
-        "5": "技能暴擊率 +20%、技能暴擊傷害 +50%"
-      }
-    },
-    {
       "id": "elf",
       "name": "精靈",
       "resonance": {
@@ -238,30 +231,12 @@ summary{cursor:pointer;color:var(--accent)}
       }
     },
     {
-      "id": "angel",
-      "name": "天使",
-      "resonance": {
-        "2": "受到治療效果 +20%",
-        "3": "每15秒恢復全隊5%生命",
-        "5": "每30秒獲得最大生命15%的護盾"
-      }
-    },
-    {
       "id": "beastkin",
       "name": "獸人",
       "resonance": {
         "2": "全隊暴擊率 +6%",
         "3": "全隊暴擊率 +10%、暴擊傷害 +20%",
         "5": "擊殺後全隊攻擊 +25%，持續8秒"
-      }
-    },
-    {
-      "id": "undead",
-      "name": "不死",
-      "resonance": {
-        "2": "擊殺敵人恢復5%生命",
-        "3": "每場首次死亡有30%機率復活",
-        "5": "全隊首次死亡必定以30%生命復活"
       }
     }
   ],
@@ -513,11 +488,8 @@ summary{cursor:pointer;color:var(--accent)}
 const PIXELS={
 racePalettes:{
   human:{S:"#f5cfa7",H:"#8a5a33"},
-  demon:{S:"#d9b8f0",H:"#4a3566"},
   elf:{S:"#ffe0c2",H:"#f5e08a"},
-  angel:{S:"#ffe6cf",H:"#fff2cf"},
-  beastkin:{S:"#edb98a",H:"#e07f3f"},
-  undead:{S:"#b8ccb0",H:"#7a8a9a"}
+  beastkin:{S:"#edb98a",H:"#e07f3f"}
 },
 heroes:{
 warrior:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",A:"#e05555",B:"#8a93a6",C:"#f0cf67",W:"#cfd6e0",G:"#8a5a33"},grid:[
@@ -851,7 +823,7 @@ function spriteImg(kind,key,size=48){return `<img class="pix" src="${spriteURL(k
 </script>
 
 <script>
-const GAME_VERSION="v0.12";
+const GAME_VERSION="v0.13";
 document.title=`ruru放置 ${GAME_VERSION}`;
 const DATA=JSON.parse(document.getElementById("game-data").textContent);
 const SAVE_KEY="game00-full-save";
@@ -962,18 +934,15 @@ function resonance(){
 function applyResonance(stats){
   const s={...stats};for(const r of resonance()){
     if(r.race==="human"){const p=r.tier===2?.05:r.tier===3?.10:.20;s.maxHp*=1+p;s.atk*=1+p}
-    if(r.race==="demon")s.atk*=r.tier===2?1.08:r.tier===3?1.13:1.20;
     if(r.race==="elf")s.speed*=1+(r.tier===2?.08:r.tier===3?.15:.25);
-    if(r.race==="angel")s.maxHp*=r.tier===2?1.05:r.tier===3?1.10:1.15;
     if(r.race==="beastkin")s.crit+=r.tier===2?.06:.10;
-    if(r.race==="undead")s.def*=r.tier===2?1.05:r.tier===3?1.10:1.16;
   }
   return {maxHp:Math.round(s.maxHp),atk:Math.round(s.atk),def:Math.round(s.def),speed:+s.speed.toFixed(2),crit:+s.crit.toFixed(3)};
 }
 function effectiveStats(c,overrideItem=null){return applyResonance(baseStats(c,overrideItem))}
 function createEnemy(name,type,index,map,tier){
   const mapIndex=DATA.maps.indexOf(map),base=75+mapIndex*48,stageScale=1+(state.stage-1)*.105,tierScale=1+(tier-1)*.30;
-  const hpMul={normal:1,elite:3.4,boss:8}[type],atkMul={normal:1,elite:1.35,boss:1.75}[type],defMul={normal:1,elite:1.4,boss:1.8}[type],scale=stageScale*tierScale;
+  const hpMul={normal:2.2,elite:4.5,boss:10}[type],atkMul={normal:1,elite:1.35,boss:1.75}[type],defMul={normal:1,elite:1.4,boss:1.8}[type],scale=stageScale*tierScale;
   const enemy={id:`${type}_${index}`,name,type,maxHp:Math.round(base*scale*hpMul),hp:0,atk:Math.round((13+mapIndex*5.5)*scale*atkMul),def:Math.round((3+mapIndex*4.2)*scale*defMul),turn:0,alive:true};enemy.hp=enemy.maxHp;return enemy;
 }
 function newBattle(){
@@ -1006,6 +975,7 @@ function rollEquipment(map,tier){
   else{state.inventory.push(item);addLog(`掉落「${item.name}」｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}。`,"drop")}
 }
 function winBattle(){
+  smoothNext=!!state.battle&&state.battle.allies.every(a=>a.alive);
   const map=MAP[state.currentMap],tier=state.tiers[state.currentMap],mapIndex=DATA.maps.findIndex(m=>m.id===state.currentMap);
   const money=22+mapIndex*12+tier*8+state.stage*3;state.gold+=money;addLog(`關卡勝利，獲得 ${money} 金幣。`,"drop");rollEquipment(map,tier);
   if(state.stage<10){state.stage++}
@@ -1025,6 +995,7 @@ function winBattle(){
   state.battle=null;saveState();renderAll();setTimeout(newBattle,450);
 }
 function loseBattle(){
+  smoothNext=false;
   const old=state.stage;state.stage=Math.max(1,state.stage-1);state.battle=null;
   addLog(`隊伍全滅：關卡 ${old} → ${state.stage}，返回前一關反覆累積經驗。`,"death");saveState();renderAll();setTimeout(newBattle,750);
 }
@@ -1047,7 +1018,8 @@ function stepBattle(){
     if(a.charge>=threshold&&livingEnemies(b).length){
       a.charge=0;
       if(a.job==="priest"){fxAttack("ally",a.id);for(const t of b.allies.filter(x=>x.alive)){const heal=Math.round(a.atk*1.6);t.hp=Math.min(t.maxHp,t.hp+heal);fxPop("ally",t.id,"+"+heal,"heal")}addLog(`${actor} 觸發「${job.triggerSkill}」，治療全隊。`,"heal")}
-      else{const target=chooseEnemy(b),mult={warrior:3.2,paladin:1.5,mage:4.2,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3,crit=a.job==="rogue"||Math.random()<a.crit,value=damage(target,a.atk*mult*(crit?1.6:1));fxAttack("ally",a.id);fxHit("enemy",target.id,value,"crit");addLog(`${actor} 觸發「${job.triggerSkill}」，對 ${target.name} 造成 ${value} 傷害。`,"skill");markEnemyDeath(target)}
+      else if(a.job==="mage"){fxAttack("ally",a.id);let total=0;for(const t of livingEnemies(b)){const crit=Math.random()<a.crit,value=damage(t,a.atk*2.2*(crit?1.6:1));fxHit("enemy",t.id,value,crit?"crit":"hurt");total+=value;markEnemyDeath(t)}addLog(`${actor} 觸發「${job.triggerSkill}」，暴風雪席捲全體敵人，共造成 ${total} 傷害。`,"skill")}
+      else{const target=chooseEnemy(b),mult={warrior:3.2,paladin:1.5,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3,crit=a.job==="rogue"||Math.random()<a.crit,value=damage(target,a.atk*mult*(crit?1.6:1));fxAttack("ally",a.id);fxHit("enemy",target.id,value,"crit");addLog(`${actor} 觸發「${job.triggerSkill}」，對 ${target.name} 造成 ${value} 傷害。`,"skill");markEnemyDeath(target)}
     }
   }
   if(!livingEnemies(b).length){winBattle();return}
@@ -1056,12 +1028,15 @@ function stepBattle(){
   if(enemyActors.length){const enemy=rand(enemyActors);enemy.turn=0;const targets=b.allies.filter(x=>x.alive);if(!targets.length){loseBattle();return}const target=rand(targets),value=damage(target,enemy.atk);target.charge+=(target.job==="warrior"||target.job==="paladin")?1:0;fxAttack("enemy",enemy.id);fxHit("ally",target.id,value,"hurt");addLog(`${enemy.name} 攻擊 ${label(getChar(target.id))}，造成 ${value} 傷害。`);if(target.hp<=0){target.alive=false;addLog(`${label(getChar(target.id))} 死亡。`,"death")}if(!b.allies.some(x=>x.alive)){loseBattle();return}}
   renderBattleStatus();
 }
-function buildScene(b){
-  document.getElementById("enemyRow").innerHTML=b.enemies.map(e=>{
+let smoothNext=false;
+function enemyRowHTML(b,drop){
+  return b.enemies.map((e,i)=>{
     const size=e.type==="boss"?68:e.type==="elite"?54:44;
-    return `<div class="unit enemy" id="unit_enemy_${e.id}"><div class="ubox">${spriteImg("enemy",state.currentMap,size)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="uname ${e.type==="boss"?"purple":e.type==="elite"?"gold":""}">${e.name}</div></div>`;
+    return `<div class="unit enemy${drop?" drop":""}" id="unit_enemy_${e.id}" ${drop?`style="animation-delay:${i*90}ms"`:""}><div class="ubox">${spriteImg("enemy",state.currentMap,size)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="uname ${e.type==="boss"?"purple":e.type==="elite"?"gold":""}">${e.name}</div></div>`;
   }).join("");
-  document.getElementById("allyRow").innerHTML=b.allies.map(a=>{
+}
+function allyRowHTML(b){
+  return b.allies.map(a=>{
     const c=getChar(a.id);
     return `<div class="unit" id="unit_ally_${a.id}"><div class="ubox">${spriteImg("char",a.id,48)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="usk"><div class="uskfill cd" style="width:100%"></div></div><div class="usk"><div class="uskfill charge" style="width:0%"></div></div><div class="uname">${label(c)}</div></div>`;
   }).join("");
@@ -1103,8 +1078,21 @@ function fxHit(side,id,value,cls){
 }
 function renderBattleStatus(){
   const scene=document.getElementById("battleScene"),b=state.battle;
-  if(!b){scene.dataset.token="";document.getElementById("enemyRow").innerHTML=`<div class="small" style="align-self:center">準備下一場戰鬥…</div>`;document.getElementById("allyRow").innerHTML="";return}
-  if(scene.dataset.token!==b.token){buildScene(b);scene.dataset.token=b.token}
+  const enemyRow=document.getElementById("enemyRow"),allyRow=document.getElementById("allyRow");
+  if(!b){
+    if(!smoothNext){scene.dataset.token="";scene.dataset.allyKey="";enemyRow.innerHTML=`<div class="small" style="align-self:center">準備下一場戰鬥…</div>`;allyRow.innerHTML=""}
+    return;
+  }
+  if(scene.dataset.token!==b.token){
+    const allyKey=b.allies.map(a=>a.id).join(",");
+    if(smoothNext&&scene.dataset.allyKey===allyKey&&allyRow.children.length){
+      enemyRow.innerHTML=enemyRowHTML(b,true);
+    }else{
+      enemyRow.innerHTML=enemyRowHTML(b,false);
+      allyRow.innerHTML=allyRowHTML(b);
+    }
+    scene.dataset.token=b.token;scene.dataset.allyKey=allyKey;smoothNext=false;
+  }
   for(const e of b.enemies)updateUnit("enemy",e);
   for(const a of b.allies)updateUnit("ally",a);
 }
@@ -1143,7 +1131,7 @@ function skillLinesHTML(c){
   const j=JOB[c.job],s=effectiveStats(c);
   const cdEff={priest:"治療血量最低的隊友240%攻擊",paladin:"恢復自身12%最大生命",mage:"對單體造成220%攻擊傷害"}[c.job]||"對單體造成180%攻擊傷害";
   const trigCond={warrior:"受擊5次",paladin:"受擊6次",priest:`累積治療達 ${Math.round(s.atk*10)} 點`,mage:"出手3次",rogue:"出手2次",hunter:"出手4次",warlock:"出手6次"}[c.job];
-  const trigEff={priest:"治療全隊各160%攻擊",warrior:"對單體造成320%攻擊傷害",paladin:"對單體造成150%攻擊傷害",mage:"對單體造成420%攻擊傷害",rogue:"對單體造成350%攻擊傷害（必定暴擊）",hunter:"對單體造成450%攻擊傷害",warlock:"對單體造成340%攻擊傷害"}[c.job];
+  const trigEff={priest:"治療全隊各160%攻擊",warrior:"對單體造成320%攻擊傷害",paladin:"對單體造成150%攻擊傷害",mage:"對全體敵人各造成220%攻擊傷害",rogue:"對單體造成350%攻擊傷害（必定暴擊）",hunter:"對單體造成450%攻擊傷害",warlock:"對單體造成340%攻擊傷害"}[c.job];
   return `<div class="small"><span class="blue">技能「${j.cdSkill}」</span>CD ${cdTimeOf(c.job)} 秒：${cdEff}</div><div class="small"><span class="gold">絕技「${j.triggerSkill}」</span>${trigCond}觸發：${trigEff}</div><div class="small"><span class="purple">被動</span>：${j.passive}</div>`;
 }
 function resonanceLineHTML(c){
@@ -1224,7 +1212,7 @@ function essenceExchange(){
   summonResult.innerHTML=`<div class="cardrow card">${spriteImg("char",c.id,40)}<div class="grow"><span class="gold">精華交換獲得：${label(c)}！</span></div></div>`;
   saveState();renderAll();
 }
-function selectMap(id){state.currentMap=id;state.stage=1;state.battle=null;saveState();renderAll();addLog(`手動前往 ${MAP[id].name}。`,"system")}
+function selectMap(id){state.currentMap=id;state.stage=1;state.battle=null;smoothNext=false;saveState();renderAll();addLog(`手動前往 ${MAP[id].name}。`,"system")}
 function renderAll(){
   const map=MAP[state.currentMap];mapName.textContent=map.name;tier.textContent=state.tiers[state.currentMap];stage.textContent=state.stage;gold.textContent=state.gold;essence.textContent=state.essence;worldClear.textContent=state.worldClear;
   statusLine.textContent=state.running?`自動戰鬥中（${state.speed}x）`:"已暫停";toggleBtn.textContent=state.running?"暫停":"繼續";speedBtn.textContent=`${state.speed}x`;
@@ -1259,7 +1247,7 @@ importBtn.onclick=()=>{try{localStorage.setItem(SAVE_KEY,saveText.value);state=l
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem(SAVE_KEY);state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(110,680/state.speed))}
-renderAll();addLog(`ruru放置 ${GAME_VERSION} 啟動：遊戲更名為「ruru放置」；人類法師換上 48×48 手繪原圖（humanMage）。`,"system");restartTimer();
+renderAll();addLog(`ruru放置 ${GAME_VERSION} 啟動：種族精簡為人類／精靈／獸人；小怪血量大幅提升；暴風雪改為全體範圍技；戰鬥勝利無人陣亡時，新敵人改為從天而降的絲滑過場。`,"system");restartTimer();
 </script>
 </body>
 </html>
