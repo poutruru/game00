@@ -28,17 +28,19 @@ nav{
   background:#454b54;border-bottom:3px solid var(--line);padding:5px;
   box-shadow:inset 0 -2px 0 var(--bevel-lo)
 }
-nav button{border:2px solid #2e333a;border-radius:8px;background:#5a616b;color:var(--muted);padding:9px 2px;font-weight:700;box-shadow:inset 0 2px 0 var(--bevel-hi),inset 0 -2px 0 var(--bevel-lo)}
+nav button{border:2px solid #2e333a;border-radius:8px;background:#5a616b;color:var(--muted);padding:9px 2px;font-weight:700;box-shadow:inset 0 2px 0 var(--bevel-hi),inset 0 -2px 0 var(--bevel-lo);transition:transform .22s cubic-bezier(.2,2.6,.4,1),box-shadow .22s cubic-bezier(.2,2.6,.4,1)}
+nav button:active{transform:translateY(3px) scale(.97);box-shadow:inset 0 2px 0 rgba(0,0,0,.22);transition-duration:.05s}
 nav button.active{background:#e08a2e;border-color:#6e3a10;color:#3d2205;box-shadow:inset 0 2px 0 #ffc873,inset 0 -3px 0 #a85f1c}
 main{padding:10px}
 .page{display:none}.page.active{display:block}
 .panel{background:var(--panel);border:3px solid var(--line);box-shadow:inset 0 2px 0 var(--bevel-hi),inset 0 -3px 0 var(--bevel-lo),0 3px 0 rgba(0,0,0,.18);padding:11px;margin-bottom:12px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .wrap{display:flex;gap:6px;flex-wrap:wrap}
-.btn{background:#e08a2e;color:#3d2205;border:2px solid #6e3a10;padding:8px 10px;font-weight:700;box-shadow:inset 0 2px 0 #ffc873,inset 0 -3px 0 #a85f1c}
-.btn:active:not(:disabled){transform:translateY(1px);box-shadow:inset 0 2px 0 #a85f1c}
+.btn{background:#e08a2e;color:#3d2205;border:2px solid #6e3a10;padding:8px 10px;font-weight:700;box-shadow:inset 0 2px 0 #ffc873,inset 0 -3px 0 #a85f1c;transition:transform .22s cubic-bezier(.2,2.6,.4,1),box-shadow .22s cubic-bezier(.2,2.6,.4,1)}
+.btn:active:not(:disabled){transform:translateY(3px) scale(.97);box-shadow:inset 0 2px 0 rgba(0,0,0,.22),inset 0 -1px 0 rgba(0,0,0,.1);transition-duration:.05s}
 .btn.primary{background:#ffb545;border-color:#8a5410;color:#4a2a00;box-shadow:inset 0 2px 0 #ffe0a0,inset 0 -3px 0 #cf8a24}
 .btn.danger{background:#c94a4a;border-color:#5e1414;color:#ffe8e0;box-shadow:inset 0 2px 0 #ea8a80,inset 0 -3px 0 #94302c}
+.btn.primary:active:not(:disabled),.btn.danger:active:not(:disabled){box-shadow:inset 0 2px 0 rgba(0,0,0,.22),inset 0 -1px 0 rgba(0,0,0,.1)}
 .btn:disabled{opacity:.45}
 .small{font-size:12px;color:var(--muted)}
 .name{font-weight:700}.accent{color:var(--accent)}.good{color:var(--good)}.bad{color:var(--bad)}
@@ -808,13 +810,20 @@ darklord:{palette:{O:"#1f1830",P:"#4a3566",E:"#ff5f8f",G:"#f0cf67",A:"#2f2440",C
 }
 };
 const ENEMY_SPRITE={slime:"slime",goblin:"goblin",wolf:"wolf",spider:"spider",gargoyle:"gargoyle",grave:"skeleton",frost:"ice",volcano:"fire",abyss:"demon",castle:"darklord"};
-/* 48×48 手繪原圖（由 art/ 資料夾的 PNG 轉入），優先於程式繪製的 16×16 網格 */
+/* 48×48 手繪原圖（由 art/ 資料夾的 PNG 轉入），優先於程式繪製的 16×16 網格。
+   idle 為站姿；atk 為攻擊影格，fxAttack 時依序播放後回到 idle。 */
 const SPRITE_OVERRIDES={
-human_warrior:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAHZSURBVGhD7ZfBTcNAEEXTBJwwogdyIQc4hgZA4RY6MD2QKkIHFBJHSg6kISOPZzb4LZZZxZK9ZL/0JOzZzP7vjE08mSQlJSUlJSUlJf2qYrsthaIQWKc+ry7Kn9jnjJeHa2HhyAQ7z34nK/4AtrkGYZ1y5rNLwV0AZXGfNdEAdsx+J+vsAtCwA6Pk1RlQg7F/sLgh6xQNDR8AG7BOcT3ZFIXQFogjxv7BogHWKa4nowvwvrwra2bC4WPaYLWcNbDzX+tb4Tgy+lhNASB+xayb8dVrDQNY3YKa8cN6KtAw4X7Bij+AjY8GYZ0yYxwVBvNGiOhIsX+wzi+AmWwJwkBm2P3IG3yExhKAjfjzl+tNHJX9842we6phncHYr6veqv8boOOr5ejsKvMaooIBGIT9zjeAiRtxQ8PO85Xy+IJD6hcermvbx47pr1NsyMbcgIYGD8AGHjYyCg15AXge8MJwf/rrFBt4jD3AY16UwlsN65QXMBAGZf9gxR9Ajc/zjcA6RUMeGDk7b6PCkWL/YEUfIFTzvAqrY6d/y7FeCDeSwNZ5j1c8frlf74o+wF+NcjSt7hnHMffrXdEF8G5S3KxcT3Xd1FzfuzzjsQXgv3rC9RQNE67vXWMI8A2Cn4+tCMvPpAAAAABJRU5ErkJggg=="
+human_warrior:{
+idle:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAE6SURBVGhD7dexTQNREEVRN0GGJYogInBMBYiQEiiCMuiARjZxQkPraKX1kc3oab9ARnOlG/3nmTfBBt7tmqZpmqZpmotM0zSv9V2+7u/mtf7+9bD/UedtxgK+Sx8wGgv4Ljd/gPnU4Qe5wHcxn9oHiAt8F/Opv37Ax9vTvPb78/HM6t3C6r6YPqB4t7C6L+bfHyAWrLSwOj+mDyi0sDo/5mYPcJCaX7Dg8eXhTN+1muf7VSys5hdc2AcU71exsJpfcOGfHbDggEr/0KQ6T+1X4oBKC6U6T+1X4oBKC6U6T+1X4oBKC6U6T+1X8vw+zWt9FxemepDzY/qA0D5gKx6c6gHqvuFYKNXC6r7hWCjVwuq+4Vgo1cLqvs34Eap5Ma/mh+NCNS/m1fxwXKjmxbyaH44L1byYV/OXOAFfB4/ZB1GySQAAAABJRU5ErkJggg==",
+atk:[
+"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEtSURBVGhD7dexTcRQEEXRbYIMJIogIiCmAkRICRRBGXRAI05IaMhEluwjltGTv7AWzZVu9Ecz7wUOfDo1TdM0TdM0Q/i4vprXTtO08fnh5lfd9+d0gaO5+AIGTj28kIFSu8BeDJQ6vIAHfH97uZ/Xfr3fbazeDazei+kCxbuB1Xsx/76AGLDSwOr+mC5QaGB1f8zFFnCROr9gwM+n242+a7XP97MYWJ1f8GAXKN7PYmB1fsGDhxVYcEGlPzSp7lPzlbig0kCp7lPzlbig0kCp7lPzlbig0kCp7lPzlTy+TvNa38WDqRZyf0wXCO0Ce7FwqgXUe8MxUKqB1XvDMVCqgdV7wzFQqoHVe7vxI1TnxXl1fjgeVOfFeXV+OB5U58V5dX44HlTnxXl1/ie+AWhDJPm1HtRUAAAAAElFTkSuQmCC",
+"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFNSURBVGhD7dexTcVQDEbhtwQdT2IIKgrqNwGipKJmCMZ4G7BIGgpY6FIF3XwiWCZXoCAf6TSxY/8uUuRwKIqiKIoVGnw+f3tsvcu3tteHUQf8sD6M3R8wTVPrtS4vlxet1/fvb4/f6rzNGMC61AGjMYB12f0B9mcdfpALrIv9WesAcYF1sT/rrx/w/HDTet/P1wujuoHVfWnqgKBuYHVfmn9/gBgw0sDq/DR1QKCB1flpdnuAg9T+GQO+3l0ttK7RPOurGFjtn3FhHRDUVzGw2j/jwj87YMYBkf7QZHWemi/EAZEGyuo8NV+IAyINlNV5ar4QB0QaKKvz1Hwhp6ep9VoXF2b1IOenqQOS1gFb8eCsHqDuG46BshpY3TccA2U1sLpvOAbKamB132b8CNV+sV/tH44L1X6xX+0fjgvVfrFf7R+OC9V+sV/t/4oPmHBpmJ0X84wAAAAASUVORK5CYII=",
+"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFGSURBVGhD7dexTQNBEIVhN0GGJRdBREDsCpBDImKKcBnugEYuIYCGluik9SfMaHQrzFnzS3+045n3ggu82RRFURRFkvb52np9//dUgWuzmgLTNLVe3+X9/q71+vvD0/ZX3bcYA/guVWA0BvBdVl/A+azDC3nAd3E+axUQD/guzmf98wLHl8fW+3V6ODN6N7B6L00VCN4NrN5Lc/MFxICRBlb3p6kCgQZW96dZbQEXqfMzBvx43p3pu0b7fL+IgdX5GQ9WgeD9IgZW52c8eLUCMy6I9A9NVvep+UJcEGmgrO5T84W4INJAWd2n5gtxQaSBsrpPzReyf5tar+/iwawWcn+aKpC0CizFwlktoN4bjoGyGli9NxwDZTWwem84BspqYPXeYvwI1XlxXp0fjgfVeXFenR+OB9V5cV6dH44H1XlxXp3/iW/2CsMpdYNJfAAAAABJRU5ErkJggg=="
+]}
 };
 const spriteCache={};
 function spriteURL(kind,key){
-  if(kind==="char"&&SPRITE_OVERRIDES[key])return SPRITE_OVERRIDES[key];
+  if(kind==="char"&&SPRITE_OVERRIDES[key])return SPRITE_OVERRIDES[key].idle;
   const cacheKey=kind+":"+key;
   if(spriteCache[cacheKey])return spriteCache[cacheKey];
   let grid,pal;
@@ -1056,6 +1065,13 @@ function fxAttack(side,id){
   const el=document.getElementById(`unit_${side}_${id}`);if(!el)return;
   el.classList.remove("atk");void el.offsetWidth;el.classList.add("atk");
   setTimeout(()=>el.classList.remove("atk"),330);
+  const ov=side==="ally"?SPRITE_OVERRIDES[id]:null;
+  if(ov&&ov.atk){
+    const img=el.querySelector("img");if(!img)return;
+    if(el._frameTimers)el._frameTimers.forEach(clearTimeout);
+    el._frameTimers=ov.atk.map((src,i)=>setTimeout(()=>{img.src=src},i*85));
+    el._frameTimers.push(setTimeout(()=>{img.src=ov.idle},ov.atk.length*85+90));
+  }
 }
 function fxPop(side,id,text,cls){
   const el=document.getElementById(`unit_${side}_${id}`);if(!el)return;
@@ -1192,7 +1208,7 @@ importBtn.onclick=()=>{try{localStorage.setItem(SAVE_KEY,saveText.value);state=l
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem(SAVE_KEY);state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(110,680/state.speed))}
-renderAll();addLog("像素原型 v0.09 啟動：全新 8-bit 明亮森林風 UI（鐵灰面板＋橘色按鈕）；人類戰士換上 48×48 手繪原圖（パンイチの勇者）。","system");restartTimer();
+renderAll();addLog("像素原型 v0.10 啟動：人類戰士新增 3 格攻擊動畫（收劍→突刺斬擊光→餘光）；按鈕加入按壓回彈回饋。","system");restartTimer();
 </script>
 </body>
 </html>
