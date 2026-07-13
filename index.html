@@ -38,7 +38,7 @@ main{padding:10px}
 .blue{color:var(--blue)}.gold{color:var(--gold)}.purple{color:var(--purple)}
 .card{padding:10px 0;border-bottom:1px solid #2e3336}.card:last-child{border-bottom:0}
 .badge{display:inline-block;border:1px solid #4e5458;padding:2px 5px;margin:2px 3px 2px 0;font-size:11px}
-.log{height:55vh;overflow:auto;white-space:pre-wrap;line-height:1.48;background:var(--panel2);border:1px solid var(--line);padding:10px}
+.log{height:32vh;overflow:auto;white-space:pre-wrap;line-height:1.48;background:var(--panel2);border:1px solid var(--line);padding:10px}
 .log div{margin:0 0 3px}
 .log .damage{color:var(--bad)}.log .heal{color:var(--good)}.log .skill{color:var(--blue)}
 .log .drop{color:var(--gold)}.log .system{color:var(--accent)}.log .death{color:#ff9c9c}
@@ -49,6 +49,31 @@ main{padding:10px}
 select,input{width:100%;background:#0d0f10;color:var(--text);border:1px solid #52585c;padding:8px}
 hr{border:0;border-top:1px solid var(--line)}
 summary{cursor:pointer;color:var(--accent)}
+.panel,.btn,select,input,.log,textarea{border-radius:10px}
+.badge{border-radius:6px}
+.hpbar,.hpfill{border-radius:3px}
+.pix{image-rendering:pixelated;vertical-align:middle}
+.cardrow{display:flex;align-items:center;gap:10px}
+.cardrow>.grow{flex:1;min-width:0}
+.scene{background:linear-gradient(#232b3f 0%,#1a2030 45%,#26301f 100%);padding:14px 6px 10px}
+.scene-row{display:flex;justify-content:center;align-items:flex-end;gap:8px;min-height:92px;flex-wrap:wrap}
+.scene-vs{text-align:center;color:#59626c;font-size:10px;margin:6px 0;letter-spacing:4px}
+.unit{position:relative;text-align:center;width:62px}
+.unit .ubox{display:inline-block}
+.unit.dead{opacity:.22;filter:grayscale(1)}
+.unit.atk .ubox{animation:lungeUp .32s}
+.unit.enemy.atk .ubox{animation:lungeDown .32s}
+.unit.hit .ubox{animation:shake .3s}
+@keyframes lungeUp{30%{transform:translateY(-9px) scale(1.07)}}
+@keyframes lungeDown{30%{transform:translateY(9px) scale(1.07)}}
+@keyframes shake{20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+.unit .uhp{height:5px;background:#282d30;border-radius:3px;margin:3px 6px 0;overflow:hidden}
+.unit .uhpfill{height:100%;background:linear-gradient(90deg,#5bc77a,#8fe3a5);transition:width .2s}
+.unit.enemy .uhpfill{background:linear-gradient(90deg,#e06666,#f0938f)}
+.unit .uname{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dmg{position:absolute;left:50%;top:0;transform:translateX(-50%);font-weight:700;font-size:13px;pointer-events:none;animation:rise .7s forwards;text-shadow:0 1px 2px #000;z-index:5}
+.dmg.hurt{color:#ff9c9c}.dmg.crit{color:#ffd166;font-size:16px}.dmg.heal{color:#8fe3a5}
+@keyframes rise{to{transform:translate(-50%,-24px);opacity:0}}
 @media(max-width:600px){nav{grid-template-columns:repeat(3,1fr);top:58px}.grid3{grid-template-columns:1fr}}
 </style>
 </head>
@@ -86,7 +111,11 @@ summary{cursor:pointer;color:var(--accent)}
       </div>
     </div>
   </div>
-  <div class="panel" id="battleStatus"></div>
+  <div class="panel scene" id="battleScene">
+    <div class="scene-row" id="enemyRow"></div>
+    <div class="scene-vs">— VS —</div>
+    <div class="scene-row" id="allyRow"></div>
+  </div>
   <div class="log" id="battleLog"></div>
 </section>
 
@@ -122,7 +151,13 @@ summary{cursor:pointer;color:var(--accent)}
   <div class="panel">
     <strong>隨機召募</strong>
     <p class="small">每次 100 金幣。重複角色分解為英雄精華 1。</p>
-    <button id="summonBtn" class="btn primary">召募 1 次</button>
+    <div class="wrap">
+      <button id="summonBtn" class="btn primary">召募 1 次（100）</button>
+      <button id="summon10Btn" class="btn primary">召募 10 次（900）</button>
+    </div>
+    <hr>
+    <div class="small">英雄精華 <span id="essenceCount">0</span>／每 20 精華可指定換取 1 名尚未擁有的隨機角色。</div>
+    <button id="essenceBtn" class="btn" style="margin-top:6px">精華交換（20 精華）</button>
     <div id="summonResult" style="margin-top:10px"></div>
   </div>
 </section>
@@ -447,6 +482,333 @@ summary{cursor:pointer;color:var(--accent)}
 </script>
 
 <script>
+/* ===== 像素角色圖（克魯賽德戰記風格 Q 版） ===== */
+const PIXELS={
+racePalettes:{
+  human:{S:"#f5cfa7",H:"#8a5a33"},
+  demon:{S:"#d9b8f0",H:"#4a3566"},
+  elf:{S:"#ffe0c2",H:"#f5e08a"},
+  angel:{S:"#ffe6cf",H:"#fff2cf"},
+  beastkin:{S:"#edb98a",H:"#e07f3f"},
+  undead:{S:"#b8ccb0",H:"#7a8a9a"}
+},
+heroes:{
+warrior:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",A:"#e05555",B:"#8a93a6",C:"#f0cf67",W:"#cfd6e0",G:"#8a5a33"},grid:[
+"..............W.",
+".....OOOOOO...W.",
+"...OOHHHHHHOO.W.",
+"..OHHHHHHHHHHOW.",
+"..OHAAAAAAAAHOW.",
+".OHSSSSSSSSSSOW.",
+".OSESSSSSSSESOW.",
+".OSESSSSSSSESOW.",
+".OSSSSXXSSSSSOG.",
+"..OSSSSSSSSSO.G.",
+"....OBBBBBBO....",
+"...OBBCCCCBBO...",
+"...OSBBBBBBSO...",
+"....OBBBBBBO....",
+"....OAA..AAO....",
+".....OO..OO....."]},
+paladin:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",A:"#9fb8f2",B:"#5e77b8",C:"#f0cf67",W:"#dde3ee",G:"#f0cf67"},grid:[
+"................",
+".....OOOOOO.....",
+"....OWWWWWWO....",
+"...OWWWWWWWWO...",
+"...OWCWWWWCWO...",
+"..OWWWWWWWWWWO..",
+"..OWSESSSSESWO..",
+"..OWSESSSSESWO..",
+"...OWSSXXSSWO...",
+".G..OOOOOOOO....",
+"GGG.OAAAAAAO....",
+".G.OAACCCCAAO...",
+".G.OSAAAAAASO...",
+"....OAAAAAAO....",
+"....OBB..BBO....",
+".....OO..OO....."]},
+priest:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",A:"#f2f0e6",B:"#c9b98a",C:"#f0cf67",G:"#f0cf67",k:"#9a6b3f"},grid:[
+".G..............",
+"GGG..OOOOOO.....",
+".G..OAAAAAAO....",
+".k.OAAAAAAAAO...",
+".k.OAASSSSAAO...",
+".k.OASESSESAO...",
+".k.OASESSESAO...",
+".k.OASSXXSSAO...",
+".k..OASSSSAO....",
+".k...OOOOOO.....",
+".k..OAAAAAAO....",
+".k.OAACGGCAAO...",
+".k.OSAAAAAASO...",
+"....OAAAAAAO....",
+"....OBB..BBO....",
+".....OO..OO....."]},
+mage:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",P:"#7f5fd3",M:"#7ff0e8",A:"#5a4098",B:"#3d2b6b",C:"#f0cf67",k:"#9a6b3f"},grid:[
+".......PP.......",
+"......PPPP......",
+".....PPPPPP.....",
+"....PPPPPPPP.MM.",
+"..PPPPPPPPPP.MM.",
+".OPPPPPPPPPPO.k.",
+".OSSESSSSESSO.k.",
+".OSSESSSSESSO.k.",
+".OSSSSXXSSSSO.k.",
+"..OSSSSSSSSO..k.",
+"....OAAAAAAO..k.",
+"...OAACMMCAAO.k.",
+"...OSAAAAAASO.k.",
+"....OAAAAAAO....",
+"....OBB..BBO....",
+".....OO..OO....."]},
+rogue:{palette:{O:"#33283d",E:"#33283d",A:"#4a5568",B:"#2f3542",C:"#c23b4e",W:"#cfd6e0",G:"#8a5a33"},grid:[
+"................",
+".....OOOOOO.....",
+"....OAAAAAAO....",
+"...OAAAAAAAAO...",
+"..OAAAAAAAAAAO..",
+"..OASSSSSSSSAO..",
+"..OASESSSSESAO..",
+"..OASESSSSESAO..",
+"..OACCCCCCCCAO..",
+"...OCCCCCCCCO...",
+"....OBBBBBBO..W.",
+"...OBBCCCCBBO.W.",
+"...OSBBBBBBSO.G.",
+"....OBBBBBBO....",
+"....OAA..AAO....",
+".....OO..OO....."]},
+hunter:{palette:{O:"#33283d",E:"#33283d",X:"#f2a2a2",A:"#4f9e58",B:"#7a5b3a",C:"#f0cf67",F:"#e05555",w:"#8a5a33"},grid:[
+"..........FF....",
+".....OOOOOF.....",
+"....OAAAAAAO....",
+"...OAAAAAAAAO...",
+"..OAAAAAAAAAAOw.",
+"..OSSSSSSSSSSO.w",
+"..OSESSSSSSESO.w",
+"..OSESSSSSSESO.w",
+"..OSSSSXXSSSSO.w",
+"...OSSSSSSSSO..w",
+"....OBBBBBBO..w.",
+"...OBBCCCCBBO.w.",
+"...OSBBBBBBSO...",
+"....OBBBBBBO....",
+"....OAA..AAO....",
+".....OO..OO....."]},
+warlock:{palette:{O:"#33283d",E:"#33283d",X:"#d8c9a8",A:"#3d2b52",B:"#2b1d3d",C:"#f0cf67",F:"#c07df0",k:"#9a6b3f",u:"#f2a2a2"},grid:[
+"..X..........X..",
+"..XX.OOOOOOXX...",
+"...XOHHHHHHOX...",
+"...OHHHHHHHHO...",
+"..OHHSSSSSSHHO..",
+"..OHSESSSSESHO..",
+"..OHSESSSSESHO..",
+"..OHSSSuuSSSHO..",
+"...OSSSSSSSSO.F.",
+"....OOOOOOOO.FFF",
+"....OAAAAAAO..F.",
+"...OAACFFCAAO.k.",
+"...OSAAAAAASO.k.",
+"....OAAAAAAO..k.",
+"....OBB..BBO....",
+".....OO..OO....."]}
+},
+enemies:{
+slime:{palette:{O:"#2e5e33",G:"#6fd66f",L:"#b8f5b8",E:"#33283d",X:"#3d8a44"},grid:[
+"................",
+"................",
+"................",
+"......OOOO......",
+"....OOGGGGOO....",
+"...OGLLGGGGGO...",
+"..OGLLGGGGGGGO..",
+"..OGGEGGGGEGGO..",
+".OGGGEGGGGEGGGO.",
+".OGGGGGXXGGGGGO.",
+".OGGGGGGGGGGGGO.",
+".OGGGGGGGGGGGGO.",
+"..OGGGGGGGGGGO..",
+"...OOGGGGGGOO...",
+".....OOOOOO.....",
+"................"]},
+goblin:{palette:{O:"#2e4e1e",G:"#7cc24e",E:"#33283d",W:"#f2f0e6",B:"#8a5a33"},grid:[
+"................",
+"......OOOO......",
+".....OGGGGO.....",
+"....OGGGGGGO....",
+".OO.OGGGGGGO.OO.",
+"OGGOGGGGGGGGOGGO",
+"OGGGGGGGGGGGGGGO",
+".OOGGEGGGGEGGOO.",
+"...OGEGGGGEGO...",
+"...OGGGWWGGGO...",
+"....OGGGGGGO....",
+".....OOOOOO.....",
+"....OBBBBBBO....",
+"...OGBBBBBBGO...",
+"....OBB..BBO....",
+".....OO..OO....."]},
+wolf:{palette:{O:"#3a3f4a",G:"#9aa5b5",W:"#e8ecf2",E:"#33283d",N:"#2b2233"},grid:[
+"................",
+"..OO........OO..",
+".OGGO......OGGO.",
+".OGGGOOOOOOGGGO.",
+".OGGGGGGGGGGGGO.",
+"..OGGGGGGGGGGO..",
+"..OGEGGGGGGEGO..",
+"..OGEGGGGGGEGO..",
+"..OGGGWWWWGGGO..",
+"...OGGWNNWGGO...",
+"...OGGWWWWGGO...",
+"....OOOOOOOO....",
+"....OGGGGGGO....",
+"...OGGGGGGGGO...",
+"....OG.OO.GO....",
+"....OO....OO...."]},
+spider:{palette:{O:"#3d2452",P:"#8a4fb0",E:"#f0cf67",X:"#5e3380",L:"#4a2f5e"},grid:[
+"................",
+"................",
+".L..L......L..L.",
+"..L..L....L..L..",
+"...L..OOOO..L...",
+"....LOPPPPOL....",
+"...OPPPPPPPPO...",
+"..OPPEPPPPEPPO..",
+"..OPPEPPPPEPPO..",
+".LOPPPPXXPPPPOL.",
+"L.OPPPPPPPPPPO.L",
+"..OPPPPPPPPPPO..",
+"...OPPPPPPPPO...",
+"....OOOOOOOO....",
+"................",
+"................"]},
+gargoyle:{palette:{O:"#33283d",G:"#8d9299",W:"#6b7078",E:"#ff6b6b",X:"#d8c9a8",F:"#e8ecf2"},grid:[
+"................",
+".WW..........WW.",
+".WWW........WWW.",
+"..WWW.OOOO.WWW..",
+"..WWWOGGGGOWWW..",
+"...WOGGGGGGOW...",
+"...OGXGGGGXGO...",
+"...OGEGGGGEGO...",
+"...OGGGGGGGGO...",
+"....OGGFFGGO....",
+".....OOOOOO.....",
+"....OGGGGGGO....",
+"...OGGGGGGGGO...",
+"....OGGGGGGO....",
+"....OG.GG.GO....",
+"....OO....OO...."]},
+skeleton:{palette:{O:"#33283d",W:"#e8e4d8",E:"#2b2233",T:"#b8b4a8"},grid:[
+"................",
+".....OOOOOO.....",
+"....OWWWWWWO....",
+"...OWWWWWWWWO...",
+"...OWWWWWWWWO...",
+"...OWEWWWWEWO...",
+"...OWEWWWWEWO...",
+"....OWWWWWWO....",
+"....OWTTTTWO....",
+".....OOOOOO.....",
+"....OWWWWWWO....",
+"...OWWTWWTWWO...",
+"...O.OWWWWO.O...",
+"....OWWWWWWO....",
+"....OWW..WWO....",
+".....OO..OO....."]},
+ice:{palette:{C:"#8fd8f0",I:"#ffffff",E:"#23557e",X:"#5fb8dd"},grid:[
+".......C........",
+"......CCC.......",
+".....CCCCC......",
+"....CCICCICC....",
+"...CCCCCCCCC....",
+"..CCCECCCCECC...",
+"..CCCECCCCECC...",
+".CCCCCCXXCCCCC..",
+".CCCCCCCCCCCCC..",
+".CCICCCCCCCCIC..",
+"..CCCCCCCCCCC...",
+"..CCCCCCCCCCC...",
+"...CCCCCCCCC....",
+"....CCCCCCC.....",
+".....CCCCC......",
+"................"]},
+fire:{palette:{F:"#ff8c42",Y:"#ffd166",E:"#a83232",X:"#ff5f2e"},grid:[
+".......F........",
+"......FF.....F..",
+"..F...FFF...FF..",
+"..FF.FFFFF..FF..",
+"..FFFFFFFFFFFF..",
+"...FFYYYYYYFF...",
+"..FFYYYYYYYYFF..",
+"..FFYEYYYYEYFF..",
+"..FYYEYYYYEYYF..",
+"..FYYYYXXYYYYF..",
+"..FFYYYYYYYYFF..",
+"...FFYYYYYYFF...",
+"....FFYYYYFF....",
+".....FFFFFF.....",
+"................",
+"................"]},
+demon:{palette:{O:"#3d1f1f",R:"#d84a4a",X:"#e8d44f",Y:"#ffd91f",W:"#f2f0e6",B:"#5e2a2a"},grid:[
+"..X..........X..",
+"..XX.OOOOOO.XX..",
+"...XORRRRRROX...",
+"...ORRRRRRRRO...",
+"..ORRRRRRRRRRO..",
+"..ORYRRRRRRYRO..",
+"..ORYRRRRRRYRO..",
+"..ORRRRWWRRRRO..",
+"...ORRRRRRRRO...",
+"....OOOOOOOO....",
+"....ORRRRRRO....",
+"...ORRBBBBRRO...",
+"...O.ORRRRO.O...",
+"....ORRRRRRO....",
+"....ORR..RRO....",
+".....OO..OO....."]},
+darklord:{palette:{O:"#1f1830",P:"#4a3566",E:"#ff5f8f",G:"#f0cf67",A:"#2f2440",C:"#c23b4e"},grid:[
+"....G.G..G.G....",
+"....GGGGGGGG....",
+"....OPPPPPPO....",
+"...OPPPPPPPPO...",
+"..OPPPPPPPPPPO..",
+"..OPEPPPPPPEPO..",
+"..OPEPPPPPPEPO..",
+"..OPPPPPPPPPPO..",
+"...OPPPPPPPPO...",
+"....OOOOOOOO....",
+"....OAAAAAAO....",
+"...OAAGCCGAAO...",
+"...O.OAAAAO.O...",
+"....OAAAAAAO....",
+"....OAA..AAO....",
+".....OO..OO....."]}
+}
+};
+const ENEMY_SPRITE={slime:"slime",goblin:"goblin",wolf:"wolf",spider:"spider",gargoyle:"gargoyle",grave:"skeleton",frost:"ice",volcano:"fire",abyss:"demon",castle:"darklord"};
+const spriteCache={};
+function spriteURL(kind,key){
+  const cacheKey=kind+":"+key;
+  if(spriteCache[cacheKey])return spriteCache[cacheKey];
+  let grid,pal;
+  if(kind==="char"){
+    const [race,job]=key.split("_"),spr=PIXELS.heroes[job];
+    if(!spr)return "";
+    grid=spr.grid;pal={...spr.palette,...(PIXELS.racePalettes[race]||{})};
+  }else{
+    const spr=PIXELS.enemies[ENEMY_SPRITE[key]]||PIXELS.enemies.slime;
+    grid=spr.grid;pal=spr.palette;
+  }
+  const cv=document.createElement("canvas");cv.width=16;cv.height=16;
+  const ctx=cv.getContext("2d");
+  grid.forEach((row,y)=>{for(let x=0;x<row.length;x++){const ch=row[x];if(ch===".")continue;ctx.fillStyle=pal[ch]||"#f0f";ctx.fillRect(x,y,1,1)}});
+  return spriteCache[cacheKey]=cv.toDataURL();
+}
+function spriteImg(kind,key,size=48){return `<img class="pix" src="${spriteURL(kind,key)}" width="${size}" height="${size}" alt="">`}
+</script>
+
+<script>
 const DATA=JSON.parse(document.getElementById("game-data").textContent);
 const SAVE_KEY="game00-full-save";
 const SAVE_VERSION=6;
@@ -573,8 +935,8 @@ function newBattle(){
   const enemies=[createEnemy(`${map.normal} A`,"normal",1,map,tier),createEnemy(`${map.normal} B`,"normal",2,map,tier),createEnemy(`${map.normal} C`,"normal",3,map,tier)];
   if(state.stage===5)enemies.push(createEnemy(map.elite,"elite",4,map,tier));
   if(state.stage===10){enemies.push(createEnemy(map.elite,"elite",4,map,tier));enemies.push(createEnemy(map.boss,"boss",5,map,tier))}
-  const allies=state.party.map(getChar).filter(Boolean).map(c=>{const s=effectiveStats(c);return {id:c.id,...s,hp:s.maxHp,charge:0,cd:0,turn:0,alive:true}});
-  state.battle={enemies,allies,time:0};addLog(`${state.stage===10?"Boss":state.stage===5?"菁英":"普通"}戰開始：${enemies.map(e=>e.name).join("、")}。`,"system");
+  const allies=state.party.map(getChar).filter(Boolean).map(c=>{const s=effectiveStats(c);return {id:c.id,job:c.job,...s,hp:s.maxHp,charge:0,cd:0,turn:0,alive:true}});
+  state.battle={enemies,allies,time:0,token:Math.random().toString(36).slice(2)};addLog(`${state.stage===10?"Boss":state.stage===5?"菁英":"普通"}戰開始：${enemies.map(e=>e.name).join("、")}。`,"system");
 }
 function livingEnemies(b){return b.enemies.filter(e=>e.alive&&e.hp>0)}
 function damage(target,raw){const value=Math.max(1,Math.round(raw-target.def*.45));target.hp=Math.max(0,target.hp-value);return value}
@@ -586,7 +948,8 @@ function grantExp(amount){
 function markEnemyDeath(enemy){if(enemy.hp<=0&&enemy.alive){enemy.alive=false;addLog(`${enemy.name} 死亡。`,"death");grantExp(enemyExp(enemy))}}
 function chooseEnemy(b){return rand(livingEnemies(b))}
 function rollEquipment(map,tier){
-  if(Math.random()>=.01)return;
+  const chance=state.stage===10?1:state.stage===5?.35:.10;
+  if(Math.random()>=chance)return;
   const slot=rand(Object.keys(SLOTS)),set=map.set,q=1+Math.floor(Math.random()*3)+Math.floor(tier/3);
   const item={id:`eq_${Date.now()}_${Math.random().toString(36).slice(2)}`,name:`${set}${SLOTS[slot]}`,set,slot,
     hp:["head","body","off"].includes(slot)?Math.round((8+q*6)*(1+tier*.14)):Math.floor(q*2),
@@ -628,31 +991,62 @@ function stepBattle(){
     if(a.cd<=0){
       a.cd=c.job==="mage"?4.3:5.2;
       if(c.job==="priest"){
-        const target=b.allies.filter(x=>x.alive).sort((x,y)=>x.hp/x.maxHp-y.hp/y.maxHp)[0],heal=Math.round(a.atk*2.4);target.hp=Math.min(target.maxHp,target.hp+heal);a.charge+=heal;addLog(`${actor} 使用「${job.cdSkill}」，${label(getChar(target.id))} 恢復 ${heal} 生命。`,"heal")
-      }else if(c.job==="paladin"){a.hp=Math.min(a.maxHp,a.hp+Math.round(a.maxHp*.12));addLog(`${actor} 使用「${job.cdSkill}」。`,"skill")}
-      else{const target=chooseEnemy(b),crit=Math.random()<a.crit,value=damage(target,a.atk*(c.job==="mage"?2.2:1.8)*(crit?1.7:1));addLog(`${actor} 使用「${job.cdSkill}」，對 ${target.name} 造成 ${value} 傷害${crit?"（暴擊）":""}。`,"skill");a.charge++;markEnemyDeath(target)}
+        const target=b.allies.filter(x=>x.alive).sort((x,y)=>x.hp/x.maxHp-y.hp/y.maxHp)[0],heal=Math.round(a.atk*2.4);target.hp=Math.min(target.maxHp,target.hp+heal);a.charge+=heal;fxAttack("ally",a.id);fxPop("ally",target.id,"+"+heal,"heal");addLog(`${actor} 使用「${job.cdSkill}」，${label(getChar(target.id))} 恢復 ${heal} 生命。`,"heal")
+      }else if(c.job==="paladin"){const heal=Math.round(a.maxHp*.12);a.hp=Math.min(a.maxHp,a.hp+heal);fxAttack("ally",a.id);fxPop("ally",a.id,"+"+heal,"heal");addLog(`${actor} 使用「${job.cdSkill}」。`,"skill")}
+      else{const target=chooseEnemy(b),crit=Math.random()<a.crit,value=damage(target,a.atk*(c.job==="mage"?2.2:1.8)*(crit?1.7:1));fxAttack("ally",a.id);fxHit("enemy",target.id,value,crit?"crit":"hurt");addLog(`${actor} 使用「${job.cdSkill}」，對 ${target.name} 造成 ${value} 傷害${crit?"（暴擊）":""}。`,"skill");a.charge++;markEnemyDeath(target)}
     }else{
-      a.turn=0;const target=chooseEnemy(b),crit=Math.random()<a.crit,value=damage(target,a.atk*(crit?1.7:1));addLog(`${actor} 普攻 ${target.name}，造成 ${value} 傷害${crit?"（暴擊）":""}。`,"damage");a.charge++;markEnemyDeath(target)
+      a.turn=0;const target=chooseEnemy(b),crit=Math.random()<a.crit,value=damage(target,a.atk*(crit?1.7:1));fxAttack("ally",a.id);fxHit("enemy",target.id,value,crit?"crit":"hurt");addLog(`${actor} 普攻 ${target.name}，造成 ${value} 傷害${crit?"（暴擊）":""}。`,"damage");a.charge++;markEnemyDeath(target)
     }
     const threshold={warrior:5,paladin:6,priest:a.atk*10,mage:3,rogue:2,hunter:4,warlock:6}[a.job];
     if(a.charge>=threshold&&livingEnemies(b).length){
       a.charge=0;
-      if(a.job==="priest"){for(const t of b.allies.filter(x=>x.alive)){const heal=Math.round(a.atk*1.6);t.hp=Math.min(t.maxHp,t.hp+heal)}addLog(`${actor} 觸發「${job.triggerSkill}」，治療全隊。`,"heal")}
-      else{const target=chooseEnemy(b),mult={warrior:3.2,paladin:1.5,mage:4.2,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3,crit=a.job==="rogue"||Math.random()<a.crit,value=damage(target,a.atk*mult*(crit?1.6:1));addLog(`${actor} 觸發「${job.triggerSkill}」，對 ${target.name} 造成 ${value} 傷害。`,"skill");markEnemyDeath(target)}
+      if(a.job==="priest"){fxAttack("ally",a.id);for(const t of b.allies.filter(x=>x.alive)){const heal=Math.round(a.atk*1.6);t.hp=Math.min(t.maxHp,t.hp+heal);fxPop("ally",t.id,"+"+heal,"heal")}addLog(`${actor} 觸發「${job.triggerSkill}」，治療全隊。`,"heal")}
+      else{const target=chooseEnemy(b),mult={warrior:3.2,paladin:1.5,mage:4.2,rogue:3.5,hunter:4.5,warlock:3.4}[a.job]||3,crit=a.job==="rogue"||Math.random()<a.crit,value=damage(target,a.atk*mult*(crit?1.6:1));fxAttack("ally",a.id);fxHit("enemy",target.id,value,"crit");addLog(`${actor} 觸發「${job.triggerSkill}」，對 ${target.name} 造成 ${value} 傷害。`,"skill");markEnemyDeath(target)}
     }
   }
   if(!livingEnemies(b).length){winBattle();return}
   for(const e of livingEnemies(b))e.turn+=e.type==="boss"?.30:e.type==="elite"?.38:.48;
   const enemyActors=livingEnemies(b).filter(e=>e.turn>=1);
-  if(enemyActors.length){const enemy=rand(enemyActors);enemy.turn=0;const targets=b.allies.filter(x=>x.alive);if(!targets.length){loseBattle();return}const target=rand(targets),value=damage(target,enemy.atk);target.charge+=(target.job==="warrior"||target.job==="paladin")?1:0;addLog(`${enemy.name} 攻擊 ${label(getChar(target.id))}，造成 ${value} 傷害。`);if(target.hp<=0){target.alive=false;addLog(`${label(getChar(target.id))} 死亡。`,"death")}if(!b.allies.some(x=>x.alive)){loseBattle();return}}
+  if(enemyActors.length){const enemy=rand(enemyActors);enemy.turn=0;const targets=b.allies.filter(x=>x.alive);if(!targets.length){loseBattle();return}const target=rand(targets),value=damage(target,enemy.atk);target.charge+=(target.job==="warrior"||target.job==="paladin")?1:0;fxAttack("enemy",enemy.id);fxHit("ally",target.id,value,"hurt");addLog(`${enemy.name} 攻擊 ${label(getChar(target.id))}，造成 ${value} 傷害。`);if(target.hp<=0){target.alive=false;addLog(`${label(getChar(target.id))} 死亡。`,"death")}if(!b.allies.some(x=>x.alive)){loseBattle();return}}
   renderBattleStatus();
 }
+function buildScene(b){
+  document.getElementById("enemyRow").innerHTML=b.enemies.map(e=>{
+    const size=e.type==="boss"?68:e.type==="elite"?54:44;
+    return `<div class="unit enemy" id="unit_enemy_${e.id}"><div class="ubox">${spriteImg("enemy",state.currentMap,size)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="uname ${e.type==="boss"?"purple":e.type==="elite"?"gold":""}">${e.name}</div></div>`;
+  }).join("");
+  document.getElementById("allyRow").innerHTML=b.allies.map(a=>{
+    const c=getChar(a.id);
+    return `<div class="unit" id="unit_ally_${a.id}"><div class="ubox">${spriteImg("char",a.id,48)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="uname">${label(c)}</div></div>`;
+  }).join("");
+}
+function updateUnit(side,u){
+  const el=document.getElementById(`unit_${side}_${u.id}`);if(!el)return;
+  el.classList.toggle("dead",!u.alive||u.hp<=0);
+  el.querySelector(".uhpfill").style.width=(u.alive?Math.max(0,100*u.hp/u.maxHp):0)+"%";
+}
+function fxAttack(side,id){
+  const el=document.getElementById(`unit_${side}_${id}`);if(!el)return;
+  el.classList.remove("atk");void el.offsetWidth;el.classList.add("atk");
+  setTimeout(()=>el.classList.remove("atk"),330);
+}
+function fxPop(side,id,text,cls){
+  const el=document.getElementById(`unit_${side}_${id}`);if(!el)return;
+  const d=document.createElement("div");d.className="dmg "+cls;d.textContent=text;el.appendChild(d);
+  setTimeout(()=>d.remove(),720);
+}
+function fxHit(side,id,value,cls){
+  const el=document.getElementById(`unit_${side}_${id}`);if(!el)return;
+  el.classList.remove("hit");void el.offsetWidth;el.classList.add("hit");
+  setTimeout(()=>el.classList.remove("hit"),310);
+  fxPop(side,id,"-"+value,cls||"hurt");
+}
 function renderBattleStatus(){
-  const el=document.getElementById("battleStatus");if(!state.battle){el.innerHTML="準備下一場戰鬥…";return}const b=state.battle;
-  let html=`<div class="small accent">敵方（${livingEnemies(b).length}/${b.enemies.length}）</div>`;
-  for(const e of b.enemies)html+=`<div class="card"><div class="row"><span class="name ${e.type==="boss"?"purple":e.type==="elite"?"gold":"bad"}">${e.name}</span><span>${e.alive?e.hp:0}/${e.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${e.alive?100*e.hp/e.maxHp:0}%"></div></div></div>`;
-  html+=`<div class="small accent">我方</div>`;
-  for(const a of b.allies){const c=getChar(a.id);html+=`<div class="card"><div class="row"><span>${label(c)} Lv.${progressOf(c.id).level}</span><span>${a.alive?a.hp:0}/${a.maxHp}</span></div><div class="hpbar"><div class="hpfill" style="width:${a.alive?100*a.hp/a.maxHp:0}%"></div></div></div>`}el.innerHTML=html;
+  const scene=document.getElementById("battleScene"),b=state.battle;
+  if(!b){scene.dataset.token="";document.getElementById("enemyRow").innerHTML=`<div class="small" style="align-self:center">準備下一場戰鬥…</div>`;document.getElementById("allyRow").innerHTML="";return}
+  if(scene.dataset.token!==b.token){buildScene(b);scene.dataset.token=b.token}
+  for(const e of b.enemies)updateUnit("enemy",e);
+  for(const a of b.allies)updateUnit("ally",a);
 }
 function equip(itemId,cid){
   const item=state.inventory.find(x=>x.id===itemId);if(!item||!cid)return;
@@ -666,23 +1060,48 @@ function updateItemCompare(itemId,cid){
   box.innerHTML=parts.join("｜");
 }
 function toggleParty(id){const index=state.party.indexOf(id);if(index>=0)state.party.splice(index,1);else if(state.party.length<partySlots())state.party.push(id);state.battle=null;saveState();renderAll()}
+function summonOnce(){
+  const c=rand(allCharacters);
+  if(state.owned.includes(c.id)){state.essence++;return {c,dup:true}}
+  state.owned.push(c.id);state.progress[c.id]={level:1,exp:0};return {c,dup:false};
+}
+function summonResultHTML(r){
+  return `<div class="cardrow card">${spriteImg("char",r.c.id,40)}<div class="grow">${r.dup?`<span class="small">重複：${label(r.c)} → 英雄精華 +1</span>`:`<span class="good">獲得：${label(r.c)}！</span>`}</div></div>`;
+}
 function summon(){
-  if(state.gold<100){summonResult.textContent="金幣不足。";return}state.gold-=100;const c=rand(allCharacters);
-  if(state.owned.includes(c.id)){state.essence++;summonResult.textContent=`重複：${label(c)} → 英雄精華 +1`}
-  else{state.owned.push(c.id);state.progress[c.id]={level:1,exp:0};summonResult.textContent=`獲得：${label(c)}`}
+  if(state.gold<100){summonResult.textContent="金幣不足。";return}state.gold-=100;
+  summonResult.innerHTML=summonResultHTML(summonOnce());
+  saveState();renderAll();
+}
+function summon10(){
+  if(state.gold<900){summonResult.textContent="金幣不足（10 連需 900）。";return}state.gold-=900;
+  const results=[];for(let i=0;i<10;i++)results.push(summonOnce());
+  summonResult.innerHTML=results.map(summonResultHTML).join("");
+  saveState();renderAll();
+}
+function essenceExchange(){
+  const pool=allCharacters.filter(c=>!state.owned.includes(c.id));
+  if(state.essence<20){summonResult.textContent="精華不足（需 20）。";return}
+  if(!pool.length){summonResult.textContent="所有角色都已擁有！";return}
+  state.essence-=20;const c=rand(pool);
+  state.owned.push(c.id);state.progress[c.id]={level:1,exp:0};
+  summonResult.innerHTML=`<div class="cardrow card">${spriteImg("char",c.id,40)}<div class="grow"><span class="gold">精華交換獲得：${label(c)}！</span></div></div>`;
   saveState();renderAll();
 }
 function selectMap(id){state.currentMap=id;state.stage=1;state.battle=null;saveState();renderAll();addLog(`手動前往 ${MAP[id].name}。`,"system")}
 function renderAll(){
   const map=MAP[state.currentMap];mapName.textContent=map.name;tier.textContent=state.tiers[state.currentMap];stage.textContent=state.stage;gold.textContent=state.gold;essence.textContent=state.essence;worldClear.textContent=state.worldClear;
   statusLine.textContent=state.running?`自動戰鬥中（${state.speed}x）`:"已暫停";toggleBtn.textContent=state.running?"暫停":"繼續";speedBtn.textContent=`${state.speed}x`;
+  essenceCount.textContent=state.essence;
+  essenceBtn.disabled=state.essence<20||allCharacters.every(c=>state.owned.includes(c.id));
+  summonBtn.disabled=state.gold<100;summon10Btn.disabled=state.gold<900;
   partySummary.textContent=state.party.map(id=>{const c=getChar(id);return `${label(c)} Lv.${progressOf(id).level}`}).join("、")||"無";
   enemySummary.textContent=state.battle?state.battle.enemies.map(e=>e.name).join("、"):(state.stage===10?`${map.boss}＋${map.elite}＋3隻${map.normal}`:state.stage===5?`${map.elite}＋3隻${map.normal}`:`3隻${map.normal}`)+`｜特性：${map.trait}`;
   document.getElementById("partySlots").textContent=`${state.party.length}/${partySlots()}`;
-  partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),p=progressOf(id),s=effectiveStats(c),items=equippedItems(id);return `<div class="card"><div class="row"><div><span class="name">${n+1}. ${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div><button class="btn danger" onclick="toggleParty('${id}')">下陣</button></div><div class="small">HP ${s.maxHp}｜攻擊 ${s.atk}｜防禦 ${s.def}｜攻速 ${s.speed}｜暴率 ${(s.crit*100).toFixed(1)}%</div><div class="small">${items.length?items.sort((a,b)=>SLOT_ORDER[a.slot]-SLOT_ORDER[b.slot]).map(i=>`${SLOTS[i.slot]}:${i.name}`).join("｜"):"尚未裝備"}</div></div>`}).join("");
+  partyList.innerHTML=state.party.map((id,n)=>{const c=getChar(id),p=progressOf(id),s=effectiveStats(c),items=equippedItems(id);return `<div class="card"><div class="cardrow"><div>${spriteImg("char",id,44)}</div><div class="grow"><div class="row"><div><span class="name">${n+1}. ${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div><button class="btn danger" onclick="toggleParty('${id}')">下陣</button></div></div></div><div class="small">HP ${s.maxHp}｜攻擊 ${s.atk}｜防禦 ${s.def}｜攻速 ${s.speed}｜暴率 ${(s.crit*100).toFixed(1)}%</div><div class="small">${items.length?items.sort((a,b)=>SLOT_ORDER[a.slot]-SLOT_ORDER[b.slot]).map(i=>`${SLOTS[i.slot]}:${i.name}`).join("｜"):"尚未裝備"}</div></div>`}).join("");
   const rs=resonance();resonanceBox.innerHTML=`種族共鳴：${rs.length?rs.map(x=>`<span class="badge">${RACE[x.race].name}${x.tier}｜${x.text}</span>`).join(""):"無"}`;
   heroSlotBox.innerHTML=heroSlotUnlocked()?`<span class="accent">英雄槽：空</span><br>已解鎖；英雄卡池尚未置入。`:`英雄槽：未解鎖（完成第 3 周目開啟）`;
-  rosterList.innerHTML=state.owned.map(getChar).filter(Boolean).map(c=>{const on=state.party.includes(c.id),p=progressOf(c.id);return `<div class="card row"><div><span class="name">${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div><button class="btn ${on?"danger":"primary"}" onclick="toggleParty('${c.id}')" ${!on&&state.party.length>=partySlots()?"disabled":""}>${on?"下陣":"上陣"}</button></div>`}).join("");
+  rosterList.innerHTML=state.owned.map(getChar).filter(Boolean).map(c=>{const on=state.party.includes(c.id),p=progressOf(c.id);return `<div class="card row"><div class="cardrow">${spriteImg("char",c.id,36)}<div><span class="name">${label(c)} Lv.${p.level}</span><div class="small">EXP ${p.exp}/${expNeeded(p.level)}</div></div></div><button class="btn ${on?"danger":"primary"}" onclick="toggleParty('${c.id}')" ${!on&&state.party.length>=partySlots()?"disabled":""}>${on?"下陣":"上陣"}</button></div>`}).join("");
   const sorted=[...state.inventory].sort((a,b)=>SLOT_ORDER[a.slot]-SLOT_ORDER[b.slot]||a.set.localeCompare(b.set)||a.name.localeCompare(b.name));
   bagCount.textContent=sorted.length;
   bagList.innerHTML=sorted.length?sorted.map(item=>{
@@ -690,19 +1109,21 @@ function renderAll(){
     const options=state.owned.map(id=>`<option value="${id}" ${id===selected?"selected":""}>${label(getChar(id))} Lv.${progressOf(id).level}</option>`).join("");
     return `<div class="card"><div class="row"><div><div class="accent">${item.name}</div><div class="small">${item.set}套｜${SLOTS[item.slot]}</div></div><div class="small">穿戴：${wearer?label(getChar(wearer)):"無"}</div></div><div>攻擊+${item.atk}　生命+${item.hp}　防禦+${item.def}　攻速+${Number(item.speed).toFixed(2)}　暴率+${(Number(item.crit)*100).toFixed(1)}%</div><div class="grid2" style="margin-top:7px"><select id="sel_${item.id}" onchange="updateItemCompare('${item.id}',this.value)">${options}</select><button class="btn" onclick="equip('${item.id}',document.getElementById('sel_${item.id}').value)">裝備</button></div><div id="cmp_${item.id}" class="small" style="margin-top:7px"></div></div>`;
   }).join(""):`<div class="small">尚無裝備，先去戰鬥。</div>`;
-  mapList.innerHTML=DATA.maps.map((m,index)=>`<div class="card"><div class="row"><div><span class="name">${index+1}. ${m.name}</span><div class="small">怪物：${m.normal}／${m.elite}／${m.boss}</div><div class="small">特性：${m.trait}｜掉落：${m.set}套｜Tier ${state.tiers[m.id]}</div></div><button class="btn ${state.currentMap===m.id?"primary":""}" onclick="selectMap('${m.id}')" ${index>=state.unlockedMaps?"disabled":""}>${index>=state.unlockedMaps?"未解鎖":state.currentMap===m.id?"目前":"前往"}</button></div></div>`).join("");
+  mapList.innerHTML=DATA.maps.map((m,index)=>`<div class="card"><div class="row"><div class="cardrow">${spriteImg("enemy",m.id,40)}<div><span class="name">${index+1}. ${m.name}</span><div class="small">怪物：${m.normal}／${m.elite}／${m.boss}</div><div class="small">特性：${m.trait}｜掉落：${m.set}套｜Tier ${state.tiers[m.id]}</div></div></div><button class="btn ${state.currentMap===m.id?"primary":""}" onclick="selectMap('${m.id}')" ${index>=state.unlockedMaps?"disabled":""}>${index>=state.unlockedMaps?"未解鎖":state.currentMap===m.id?"目前":"前往"}</button></div></div>`).join("");
   renderBattleStatus();requestAnimationFrame(()=>{for(const item of sorted){const wearer=findWearer(item.id),cid=wearer||state.owned[0];if(cid)updateItemCompare(item.id,cid)}});
 }
 document.querySelectorAll("nav button").forEach(button=>button.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));button.classList.add("active");document.getElementById(button.dataset.page).classList.add("active")});
 toggleBtn.onclick=()=>{state.running=!state.running;saveState();renderAll()};
 speedBtn.onclick=()=>{state.speed=state.speed===1?2:state.speed===2?5:1;saveState();restartTimer();renderAll()};
 summonBtn.onclick=summon;
+summon10Btn.onclick=summon10;
+essenceBtn.onclick=essenceExchange;
 exportBtn.onclick=()=>saveText.value=JSON.stringify({...state,battle:null},null,2);
 importBtn.onclick=()=>{try{localStorage.setItem(SAVE_KEY,saveText.value);state=loadState();renderAll();alert("匯入成功")}catch{alert("存檔格式錯誤")}};
 resetBtn.onclick=()=>{if(confirm("確定重置全部進度？")){localStorage.removeItem(SAVE_KEY);state=clone(defaultState);battleLog.innerHTML="";addLog("存檔已重置。","system");restartTimer();renderAll()}};
 dataPreview.textContent=JSON.stringify(DATA,null,2);
 function restartTimer(){clearInterval(timer);timer=setInterval(stepBattle,Math.max(110,680/state.speed))}
-renderAll();addLog("文字原型 v0.06 啟動：角色等級、經驗、關卡後退、自動周目與裝備比較已加入。","system");restartTimer();
+renderAll();addLog("像素原型 v0.07 啟動：新增像素角色戰鬥場景、傷害飄字、10 連召募、精華交換；掉寶率上調（普通10%／菁英35%／Boss必掉）；修正觸發技能永不發動的問題。","system");restartTimer();
 </script>
 </body>
 </html>
