@@ -1,4 +1,5 @@
-/* StatsService：角色成長、能力值計算與種族共鳴。讀取 game.state，不做修改（progressOf 除外：補建缺漏紀錄）。 */
+/* StatsService：隊伍等級成長與角色能力值計算。
+   所有角色共用「隊伍等級」；素質 = 職業基礎 × 等級成長 × 裝備 × 套裝。 */
 class StatsService {
   constructor(game) {
     this.game = game;
@@ -12,30 +13,28 @@ class StatsService {
     return this.game.book;
   }
 
-  progressOf(id) {
-    this.state.progress[id] ||= { level: 1, exp: 0 };
-    return this.state.progress[id];
-  }
-
   expNeeded(level) {
-    return 45 + level * 30;
+    return 60 + level * 45;
   }
 
-  partySlots() {
-    return this.state.worldClear >= 2 ? 5 : this.state.worldClear >= 1 ? 4 : 3;
+  /* 可同時上陣人數：3 起始，一周目+1、二周目+1，上限 5（第 6 格為未來擴充預留） */
+  fieldCap() {
+    return Math.min(5, 3 + this.state.worldClear);
   }
 
-  heroSlotUnlocked() {
-    return this.state.worldClear >= 3;
+  /* 陣型中實際上陣的角色（超出人數上限的忽略） */
+  partyIds() {
+    const cap = this.fieldCap();
+    const ids = [];
+    for (const id of this.state.formation) {
+      if (id && ids.length < cap && !ids.includes(id)) ids.push(id);
+    }
+    return ids;
   }
 
-  cdTimeOf(job) {
-    return job === "mage" ? 4.3 : 5.2;
-  }
-
-  /* 絕技充能門檻（u 需有 job 與 atk） */
-  thresholdOf(u) {
-    return u.job === "priest" ? u.atk * 10 : { warrior: 5, paladin: 6, mage: 3, rogue: 2, hunter: 4, warlock: 6 }[u.job] || 5;
+  rowOf(id) {
+    const i = this.state.formation.indexOf(id);
+    return i >= 3 ? "back" : "front";
   }
 
   setCounts(items) {
@@ -48,57 +47,27 @@ class StatsService {
     return n >= 5 ? 5 : n >= 3 ? 3 : n >= 2 ? 2 : 0;
   }
 
-  /* 職業基礎 × 等級成長 × 裝備 × 套裝 */
-  baseStats(c, overrideItem = null) {
+  /* 完整素質：生命/攻擊/防禦/爆擊率/爆擊傷害/攻速/技能時間倍率(cdr，越高越快) */
+  effectiveStats(c, overrideItem = null) {
     const j = this.book.job[c.job];
-    const p = this.progressOf(c.id);
-    const growth = 1 + (p.level - 1) * 0.06;
-    let hp = j.hp * growth, atk = j.atk * growth, def = j.def * growth, speed = j.speed;
-    let crit = c.job === "rogue" ? 0.18 : 0.08;
+    const growth = 1 + (this.state.teamLevel - 1) * 0.06;
+    let hp = j.hp * growth, atk = j.atk * growth, def = j.def * growth;
+    let crit = j.crit, critDmg = j.critDmg, aspd = j.aspd, cdr = 1;
     const items = this.game.equipment.equippedItems(c.id, overrideItem);
     for (const i of items) {
       hp += Number(i.hp) || 0;
       atk += Number(i.atk) || 0;
       def += Number(i.def) || 0;
-      speed += Number(i.speed) || 0;
+      aspd += Number(i.speed) || 0;
       crit += Number(i.crit) || 0;
     }
     for (const [set, n] of Object.entries(this.setCounts(items))) {
       const tier = this.setTier(n);
       if (set === "史萊姆" && tier >= 2) hp *= 1.15;
-      if (set === "哥布林" && tier >= 2) speed *= 1.10;
+      if (set === "哥布林" && tier >= 2) aspd *= 1.10;
       if (set === "狼牙" && tier >= 2) crit += 0.10;
       if (set === "魔王" && tier >= 2) { hp *= 1.08; atk *= 1.08; def *= 1.08; }
     }
-    return { maxHp: Math.round(hp), atk: Math.round(atk), def: Math.round(def), speed: +speed.toFixed(2), crit: +crit.toFixed(3) };
-  }
-
-  /* 目前隊伍觸發中的種族共鳴清單 */
-  resonance() {
-    const counts = {};
-    for (const id of this.state.party) {
-      const c = this.book.get(id);
-      if (c) counts[c.race] = (counts[c.race] || 0) + 1;
-    }
-    const out = [];
-    for (const [race, n] of Object.entries(counts)) {
-      const tier = n >= 5 ? 5 : n >= 3 ? 3 : n >= 2 ? 2 : 0;
-      if (tier) out.push({ race, tier, text: this.book.race[race].resonance[tier] });
-    }
-    return out;
-  }
-
-  applyResonance(stats) {
-    const s = { ...stats };
-    for (const r of this.resonance()) {
-      if (r.race === "human") { const p = r.tier === 2 ? 0.05 : r.tier === 3 ? 0.10 : 0.20; s.maxHp *= 1 + p; s.atk *= 1 + p; }
-      if (r.race === "elf") s.speed *= 1 + (r.tier === 2 ? 0.08 : r.tier === 3 ? 0.15 : 0.25);
-      if (r.race === "beastkin") s.crit += r.tier === 2 ? 0.06 : 0.10;
-    }
-    return { maxHp: Math.round(s.maxHp), atk: Math.round(s.atk), def: Math.round(s.def), speed: +s.speed.toFixed(2), crit: +s.crit.toFixed(3) };
-  }
-
-  effectiveStats(c, overrideItem = null) {
-    return this.applyResonance(this.baseStats(c, overrideItem));
+    return { maxHp: Math.round(hp), atk: Math.round(atk), def: Math.round(def), crit: +crit.toFixed(3), critDmg: +critDmg.toFixed(2), aspd: +aspd.toFixed(2), cdr: +cdr.toFixed(2) };
   }
 }

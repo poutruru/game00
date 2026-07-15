@@ -8,21 +8,21 @@ class SpriteFactory {
     this.cache = {};
   }
 
-  /* kind: "char"（key=角色id 如 human_warrior）或 "enemy"（key=地圖id） */
+  /* kind: "char"（key=職業id 如 warrior）或 "enemy"（key=地圖id） */
   url(kind, key) {
     if (kind === "char") {
-      const job = key.split("_")[1];
+      const job = key.includes("_") ? key.split("_")[1] : key;
       if (this.jobArt[job]) return this.jobArt[job].idle;
     }
     const cacheKey = kind + ":" + key;
     if (this.cache[cacheKey]) return this.cache[cacheKey];
     let grid, pal;
     if (kind === "char") {
-      const [race, job] = key.split("_");
-      const spr = this.pixels.heroes[job];
+      const job = key.includes("_") ? key.split("_")[1] : key;
+      const spr = this.pixels.heroes[job] || this.pixels.heroes.priest;
       if (!spr) return "";
       grid = spr.grid;
-      pal = { ...spr.palette, ...(this.pixels.racePalettes[race] || {}) };
+      pal = { ...spr.palette, ...(this.pixels.racePalettes.human || {}) };
     } else {
       const spr = this.pixels.enemies[this.enemySprite[key]] || this.pixels.enemies.slime;
       grid = spr.grid;
@@ -49,7 +49,8 @@ class SpriteFactory {
 
   /* 攻擊影格（之後由手繪提供）；沒有影格的職業回傳 null */
   attackFrames(charId) {
-    const art = this.jobArt[charId.split("_")[1]];
+    const job = charId.includes("_") ? charId.split("_")[1] : charId;
+    const art = this.jobArt[job];
     return art && art.atk ? art : null;
   }
 }

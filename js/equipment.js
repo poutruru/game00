@@ -111,27 +111,55 @@ class EquipmentService {
     return true;
   }
 
-  /* 戰鬥勝利的裝備掉落：無數量上限，掉落率相應調降（普通 5%／菁英 20%／Boss 60%） */
+  /* 素質生成：只看裝備等級（＝掉落時的地圖 Tier）與部位；史萊姆 T3 可以贏過魔王 T2 */
+  rollStats(slot, level) {
+    const q = 1 + Math.floor(Math.random() * 3);
+    const scale = 1 + (level - 1) * 0.4;
+    return {
+      hp: ["head", "body", "off"].includes(slot) ? Math.round((8 + q * 6) * scale) : Math.floor(q * 2 * scale),
+      atk: slot === "main" ? Math.round((5 + q * 5) * scale) : Math.floor(q * 1.5 * scale),
+      def: ["body", "head"].includes(slot) ? Math.round((2 + q * 2) * scale) : 0,
+      speed: slot === "feet" ? +(q * 0.02 * (1 + (level - 1) * 0.1)).toFixed(3) : 0,
+      crit: slot === "main" ? +(q * 0.006 * (1 + (level - 1) * 0.1)).toFixed(4) : 0,
+    };
+  }
+
+  /* 戰鬥勝利的裝備掉落：無數量上限；裝備等級＝地圖目前 Tier */
   rollDrop(map, tier) {
     const chance = this.state.stage === 10 ? 0.6 : this.state.stage === 5 ? 0.20 : 0.05;
     if (Math.random() >= chance) return;
     const SLOTS = this.game.config.SLOTS;
     const slot = rand(Object.keys(SLOTS));
-    const set = map.set;
-    const q = 1 + Math.floor(Math.random() * 3) + Math.floor(tier / 3);
     const item = {
       id: `eq_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      name: `${set}${SLOTS[slot]}`,
-      set,
+      name: `${map.set}${SLOTS[slot]}`,
+      set: map.set,
       slot,
-      hp: ["head", "body", "off"].includes(slot) ? Math.round((8 + q * 6) * (1 + tier * 0.14)) : Math.floor(q * 2),
-      atk: slot === "main" ? Math.round((5 + q * 5) * (1 + tier * 0.13)) : Math.floor(q * 1.5),
-      def: ["body", "head"].includes(slot) ? 2 + q * 2 : 0,
-      speed: slot === "feet" ? q * 0.02 : 0,
-      crit: slot === "main" ? q * 0.006 : 0,
+      level: tier,
+      rerolls: 0,
+      ...this.rollStats(slot, tier),
     };
     this.state.inventory.push(item);
-    this.game.view.log(`掉落「${item.name}」｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}。`, "drop");
+    this.game.view.log(`掉落「${item.name}」Lv.${tier}｜攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}。`, "drop");
+  }
+
+  /* 洗素質：花費礦物精隨重擲同等級素質；每洗一次成本翻倍 */
+  rerollCost(item) {
+    return 10 * Math.pow(2, item.rerolls || 0);
+  }
+
+  reroll(itemId) {
+    const item = this.state.inventory.find((x) => x.id === itemId);
+    if (!item) return false;
+    const cost = this.rerollCost(item);
+    if (this.state.mineralEssence < cost) { alert(`礦物精隨不足（需要 ${cost}）。`); return false; }
+    this.state.mineralEssence -= cost;
+    Object.assign(item, this.rollStats(item.slot, item.level || 1));
+    item.rerolls = (item.rerolls || 0) + 1;
+    this.state.battle = null;
+    this.game.view.log(`洗練「${item.name}」→ 攻擊+${item.atk} 生命+${item.hp} 防禦+${item.def}（花費 ${cost} 精隨）。`, "drop");
+    this.game.persist();
+    return true;
   }
 
   /* 鎖定／解鎖：鎖定中的裝備不能被分解或批量選取 */

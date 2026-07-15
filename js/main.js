@@ -3,13 +3,12 @@
 class Game {
   constructor() {
     this.config = CONFIG;
-    this.book = new CharacterBook(GAME_DATA, CONFIG.HIDDEN_JOBS);
+    this.book = new CharacterBook(GAME_DATA);
     this.sprites = new SpriteFactory(PIXELS, ENEMY_SPRITE, JOB_ART);
     this.save = new SaveManager(CONFIG, this.book, GAME_DATA);
     this.state = this.save.load();
     this.stats = new StatsService(this);
     this.equipment = new EquipmentService(this);
-    this.summon = new SummonService(this);
     this.battle = new BattleEngine(this);
     this.view = new BattleView(this);
     this.ui = new UIController(this);

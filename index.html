@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>ruru放置</title>
-<link rel="stylesheet" href="css/style.css?v=0.17">
+<link rel="stylesheet" href="css/style.css?v=0.18">
 </head>
 <body>
 <header>
@@ -12,8 +12,9 @@
     <div><span id="mapName">史萊姆平原</span> T<span id="tier">1</span>　<span id="stage">1</span>/10</div>
     <div>金幣 <span id="gold">0</span></div>
   </div>
-  <div class="subline">
-    世界周回 <span id="worldClear">0</span>｜英雄精華 <span id="essence">0</span>｜<span id="statusLine">自動戰鬥中</span>
+  <div class="subline row">
+    <div>隊伍 Lv.<span id="teamLevel">1</span>（<span id="teamExp">0</span>/<span id="teamExpNeed">0</span>）｜精華 <span id="essence">0</span>｜<span id="statusLine">自動戰鬥中</span></div>
+    <button id="helpBtn" class="btn mini primary">📖 遊戲說明</button>
   </div>
 </header>
 
@@ -22,7 +23,7 @@
   <button data-page="party">隊伍</button>
   <button data-page="bag">背包</button>
   <button data-page="maps">地圖</button>
-  <button data-page="summon">召募</button>
+  <button data-page="logs">紀錄</button>
   <button data-page="save">存檔</button>
 </nav>
 
@@ -31,7 +32,7 @@
   <div class="panel">
     <div class="row">
       <div>
-        <div>我方：<span id="partySummary"></span></div>
+        <div class="small">我方：<span id="partySummary"></span></div>
         <div class="small">敵方：<span id="enemySummary"></span></div>
       </div>
       <div class="wrap">
@@ -41,23 +42,23 @@
     </div>
   </div>
   <div class="panel scene" id="battleScene">
-    <div class="scene-row" id="enemyRow"></div>
+    <div class="scene-row" id="enemyBackRow"></div>
+    <div class="scene-row" id="enemyFrontRow"></div>
     <div class="scene-vs">— VS —</div>
-    <div class="scene-row" id="allyRow"></div>
+    <div class="scene-row" id="allyFrontRow"></div>
+    <div class="scene-row" id="allyBackRow"></div>
   </div>
-  <div class="log" id="battleLog"></div>
 </section>
 
 <section class="page" id="party">
   <div class="panel">
-    <div class="row"><strong>上陣隊伍</strong><span class="small">欄位 <span id="partySlots"></span></span></div>
-    <div id="partyList"></div>
+    <div class="row"><strong>上陣陣型</strong><span class="small">可上陣 <span id="fieldCount"></span> 人</span></div>
+    <div class="small" style="margin:6px 0">拖曳角色到格子擺放；上排＝前排（承受普攻）、下排＝後排。</div>
+    <div id="formationGrid"></div>
     <div id="equipPanel"></div>
-    <div id="resonanceBox" class="small"></div>
-    <div id="heroSlotBox" class="card small"></div>
   </div>
   <div class="panel">
-    <strong>已擁有角色</strong>
+    <strong>已解鎖職業</strong>
     <div id="rosterSortBar" class="small" style="margin:7px 0"></div>
     <div id="rosterList"></div>
   </div>
@@ -66,7 +67,7 @@
 <section class="page" id="bag">
   <div class="panel">
     <div class="row"><strong>裝備背包</strong><span class="small"><span id="bagCount"></span> 件｜礦物精隨 <span id="mineralCount">0</span></span></div>
-    <div class="small">裝備部位：頭、身體、腳部、主手、副手。套裝只取目前最高的 2／3／5 件效果。換裝請到「隊伍」頁；分解裝備可獲得礦物精隨（之後用於強化裝備）。</div>
+    <div class="small">裝備等級＝掉落時的地圖 Tier。「洗素質」花費礦物精隨重擲素質，成本逐次翻倍。</div>
     <div id="bagTools" class="small" style="margin:7px 0"></div>
     <div id="bagList"></div>
   </div>
@@ -79,18 +80,10 @@
   </div>
 </section>
 
-<section class="page" id="summon">
+<section class="page" id="logs">
   <div class="panel">
-    <strong>隨機召募</strong>
-    <p class="small">每次 100 金幣。重複角色分解為英雄精華 1。</p>
-    <div class="wrap">
-      <button id="summonBtn" class="btn primary">召募 1 次（100）</button>
-      <button id="summon10Btn" class="btn primary">召募 10 次（900）</button>
-    </div>
-    <hr>
-    <div class="small">英雄精華 <span id="essenceCount">0</span>／每 20 精華可指定換取 1 名尚未擁有的隨機角色。</div>
-    <button id="essenceBtn" class="btn" style="margin-top:6px">精華交換（20 精華）</button>
-    <div id="summonResult" style="margin-top:10px"></div>
+    <strong>戰鬥紀錄</strong>
+    <div class="log" id="battleLog" style="margin-top:8px;height:60vh"></div>
   </div>
 </section>
 
@@ -106,7 +99,7 @@
     <textarea id="saveText" style="margin-top:10px;width:100%;height:180px;background:#090b0c;color:#ddd;border:1px solid #555"></textarea>
   </div>
   <details class="panel">
-    <summary>查看內嵌資料 JSON</summary>
+    <summary>查看遊戲資料 JSON</summary>
     <pre id="dataPreview" style="white-space:pre-wrap;font-size:11px"></pre>
   </details>
 </section>
@@ -121,21 +114,27 @@
   </div>
 </div>
 
+<div id="infoModal" class="modal-mask" hidden>
+  <div class="modal">
+    <button class="modal-x" onclick="game.ui.closeInfo()" aria-label="關閉">✕</button>
+    <strong class="accent" id="infoTitle"></strong>
+    <ul id="infoBody"></ul>
+  </div>
+</div>
 
-
-<script src="js/util.js?v=0.17"></script>
-<script src="js/config.js?v=0.17"></script>
-<script src="js/data.js?v=0.17"></script>
-<script src="js/art.js?v=0.17"></script>
-<script src="js/sprites.js?v=0.17"></script>
-<script src="js/characters.js?v=0.17"></script>
-<script src="js/save.js?v=0.17"></script>
-<script src="js/stats.js?v=0.17"></script>
-<script src="js/equipment.js?v=0.17"></script>
-<script src="js/summon.js?v=0.17"></script>
-<script src="js/battle.js?v=0.17"></script>
-<script src="js/battle-view.js?v=0.17"></script>
-<script src="js/ui.js?v=0.17"></script>
-<script src="js/main.js?v=0.17"></script>
+<script src="js/util.js?v=0.18"></script>
+<script src="js/config.js?v=0.18"></script>
+<script src="js/data.js?v=0.18"></script>
+<script src="js/skills.js?v=0.18"></script>
+<script src="js/art.js?v=0.18"></script>
+<script src="js/sprites.js?v=0.18"></script>
+<script src="js/characters.js?v=0.18"></script>
+<script src="js/save.js?v=0.18"></script>
+<script src="js/stats.js?v=0.18"></script>
+<script src="js/equipment.js?v=0.18"></script>
+<script src="js/battle.js?v=0.18"></script>
+<script src="js/battle-view.js?v=0.18"></script>
+<script src="js/ui.js?v=0.18"></script>
+<script src="js/main.js?v=0.18"></script>
 </body>
 </html>

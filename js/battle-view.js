@@ -1,20 +1,20 @@
-/* BattleView：戰鬥場景的 DOM 渲染、單位血條/技能條更新、攻擊與受擊特效、戰鬥紀錄。 */
+/* BattleView：戰鬥場景渲染。四排：敵後、敵前、VS、我前、我後。
+   所有戰鬥回饋走飄字特效（顏色見 css .dmg.*）；紀錄文字寫入「紀錄」分頁。 */
 class BattleView {
   constructor(game) {
     this.game = game;
   }
 
-  get state() {
-    return this.game.state;
-  }
+  get state() { return this.game.state; }
 
   log(text, cls = "") {
     const el = $("battleLog");
+    if (!el) return;
     const d = document.createElement("div");
     d.textContent = text;
     d.className = cls;
     el.appendChild(d);
-    while (el.children.length > 220) el.removeChild(el.firstChild);
+    while (el.children.length > 300) el.removeChild(el.firstChild);
     el.scrollTop = el.scrollHeight;
   }
 
@@ -22,40 +22,65 @@ class BattleView {
     $("battleLog").innerHTML = "";
   }
 
-  enemyRowHTML(b, drop) {
-    return b.enemies.map((e, i) => {
-      const size = e.type === "boss" ? 68 : e.type === "elite" ? 54 : 44;
-      return `<div class="unit enemy${drop ? " drop" : ""}" id="unit_enemy_${e.id}" ${drop ? `style="animation-delay:${i * 90}ms"` : ""}><div class="ubox">${this.game.sprites.img("enemy", this.state.currentMap, size)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="uname ${e.type === "boss" ? "purple" : e.type === "elite" ? "gold" : ""}">${e.name}</div></div>`;
-    }).join("");
+  unitHTML(u, drop, delay) {
+    const size = u.side === "ally" ? 48 : u.type === "boss" ? 68 : u.type === "elite" ? 54 : 44;
+    const img = u.side === "ally" ? this.game.sprites.img("char", u.key, size) : this.game.sprites.img("enemy", this.state.currentMap, size);
+    return `<div class="unit${u.side === "enemy" ? " enemy" : ""}${drop ? " drop" : ""}" id="unit_${u.side}_${u.key}" ${drop ? `style="animation-delay:${delay}ms"` : ""}><div class="ubox">${img}</div><div class="uhp"><div class="ushield"></div><div class="uhpfill" style="width:100%"></div></div><div class="ucast"><div class="ucastfill" style="width:0%"></div></div><div class="uname ${u.type === "boss" ? "purple" : u.type === "elite" ? "gold" : ""}">${u.name}</div></div>`;
   }
 
-  allyRowHTML(b) {
-    return b.allies.map((a) => {
-      return `<div class="unit" id="unit_ally_${a.id}"><div class="ubox">${this.game.sprites.img("char", a.id, 48)}</div><div class="uhp"><div class="uhpfill" style="width:100%"></div></div><div class="usk"><div class="uskfill cd" style="width:100%"></div></div><div class="usk"><div class="uskfill charge" style="width:0%"></div></div><div class="uname">${this.game.book.labelOf(a.id)}</div></div>`;
-    }).join("");
+  rowHTML(units, drop) {
+    return units.map((u, i) => this.unitHTML(u, drop, i * 90)).join("");
   }
 
-  updateUnit(side, u) {
-    const el = $(`unit_${side}_${u.id}`);
+  buildRows(b, dropEnemies) {
+    $("enemyBackRow").innerHTML = this.rowHTML(b.enemies.filter((e) => e.row === "back"), dropEnemies);
+    $("enemyFrontRow").innerHTML = this.rowHTML(b.enemies.filter((e) => e.row === "front"), dropEnemies);
+  }
+
+  buildAllyRows(b) {
+    $("allyFrontRow").innerHTML = this.rowHTML(b.allies.filter((a) => a.row === "front"), false);
+    $("allyBackRow").innerHTML = this.rowHTML(b.allies.filter((a) => a.row === "back"), false);
+  }
+
+  rebuildScene() {
+    const b = this.state.battle;
+    if (!b) return;
+    this.buildRows(b, false);
+    this.buildAllyRows(b);
+  }
+
+  el(u) {
+    return $(`unit_${u.side}_${u.key}`);
+  }
+
+  updateUnit(b, u) {
+    const el = this.el(u);
     if (!el) return;
     el.classList.toggle("dead", !u.alive || u.hp <= 0);
     el.querySelector(".uhpfill").style.width = (u.alive ? Math.max(0, (100 * u.hp) / u.maxHp) : 0) + "%";
-    const cdFill = el.querySelector(".uskfill.cd");
-    if (cdFill) {
-      const stats = this.game.stats;
-      cdFill.style.width = (u.alive ? Math.max(0, Math.min(100, 100 * (1 - Math.max(0, u.cd) / stats.cdTimeOf(u.job)))) : 0) + "%";
-      el.querySelector(".uskfill.charge").style.width = (u.alive ? Math.max(0, Math.min(100, (100 * u.charge) / stats.thresholdOf(u))) : 0) + "%";
+    /* 護盾：血條上的半透明白色覆蓋 */
+    const sh = el.querySelector(".ushield");
+    sh.style.width = u.shield > 0 ? Math.min(100, (100 * u.shield) / u.maxHp) + "%" : "0%";
+    /* 詠唱條 */
+    const cast = el.querySelector(".ucastfill");
+    if (u.casting && u.alive) {
+      const progress = 1 - (u.casting.until - b.time) / u.casting.dur;
+      cast.parentElement.style.visibility = "visible";
+      cast.style.width = Math.max(0, Math.min(100, progress * 100)) + "%";
+    } else {
+      cast.parentElement.style.visibility = "hidden";
+      cast.style.width = "0%";
     }
   }
 
-  fxAttack(side, id) {
-    const el = $(`unit_${side}_${id}`);
+  fxAttack(u) {
+    const el = this.el(u);
     if (!el) return;
     el.classList.remove("atk");
     void el.offsetWidth;
     el.classList.add("atk");
     setTimeout(() => el.classList.remove("atk"), 330);
-    const art = side === "ally" ? this.game.sprites.attackFrames(id) : null;
+    const art = u.side === "ally" ? this.game.sprites.attackFrames(u.key) : null;
     if (art) {
       const img = el.querySelector("img");
       if (!img) return;
@@ -65,55 +90,54 @@ class BattleView {
     }
   }
 
-  fxPop(side, id, text, cls) {
-    const el = $(`unit_${side}_${id}`);
+  fxPop(u, text, cls) {
+    const el = this.el(u);
     if (!el) return;
     const d = document.createElement("div");
     d.className = "dmg " + cls;
     d.textContent = text;
     el.appendChild(d);
-    setTimeout(() => d.remove(), 720);
+    setTimeout(() => d.remove(), 760);
   }
 
-  fxHit(side, id, value, cls) {
-    const el = $(`unit_${side}_${id}`);
+  fxHit(u, value, cls) {
+    const el = this.el(u);
     if (!el) return;
     el.classList.remove("hit");
     void el.offsetWidth;
     el.classList.add("hit");
     setTimeout(() => el.classList.remove("hit"), 310);
-    this.fxPop(side, id, "-" + value, cls || "hurt");
+    this.fxPop(u, "-" + value, cls || "hurt");
   }
 
-  /* 場景渲染：戰鬥 token 變更時重建；絲滑過場只重建敵方列（帶落下動畫） */
   render() {
     const scene = $("battleScene");
     const b = this.state.battle;
-    const enemyRow = $("enemyRow");
-    const allyRow = $("allyRow");
     const engine = this.game.battle;
     if (!b) {
       if (!engine.smoothNext) {
         scene.dataset.token = "";
         scene.dataset.allyKey = "";
-        enemyRow.innerHTML = `<div class="small" style="align-self:center">準備下一場戰鬥…</div>`;
-        allyRow.innerHTML = "";
+        $("enemyFrontRow").innerHTML = `<div class="small" style="align-self:center">準備下一場戰鬥…</div>`;
+        $("enemyBackRow").innerHTML = "";
+        $("allyFrontRow").innerHTML = "";
+        $("allyBackRow").innerHTML = "";
       }
       return;
     }
     if (scene.dataset.token !== b.token) {
-      const allyKey = b.allies.map((a) => a.id).join(",");
-      if (engine.smoothNext && scene.dataset.allyKey === allyKey && allyRow.children.length) {
-        enemyRow.innerHTML = this.enemyRowHTML(b, true);
+      const allyKey = b.allies.map((a) => a.key + a.row).join(",");
+      if (engine.smoothNext && scene.dataset.allyKey === allyKey && ($("allyFrontRow").children.length || $("allyBackRow").children.length)) {
+        this.buildRows(b, true);
       } else {
-        enemyRow.innerHTML = this.enemyRowHTML(b, false);
-        allyRow.innerHTML = this.allyRowHTML(b);
+        this.buildRows(b, false);
+        this.buildAllyRows(b);
       }
       scene.dataset.token = b.token;
       scene.dataset.allyKey = allyKey;
       engine.smoothNext = false;
     }
-    for (const e of b.enemies) this.updateUnit("enemy", e);
-    for (const a of b.allies) this.updateUnit("ally", a);
+    for (const e of b.enemies) this.updateUnit(b, e);
+    for (const a of b.allies) this.updateUnit(b, a);
   }
 }

@@ -101,6 +101,32 @@ button:disabled{cursor:not-allowed}
 input[type=checkbox]{width:auto;accent-color:#e08a2e;transform:scale(1.25);margin:0 4px 0 0;vertical-align:middle}
 .picklabel{margin-right:8px;white-space:nowrap;cursor:pointer}
 .sortbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* 陣型六格（上排前排、下排後排） */
+.formation{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.fslot{min-height:96px;border:2px dashed #6e7683;border-radius:10px;background:#3d434b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;position:relative}
+.fslot.filled{border-style:solid;border-color:#8b794a;background:#4a4636}
+.fslot.dragover{border-color:var(--accent);background:#55503a}
+.fslot .fx{position:absolute;top:2px;right:4px;background:none;border:0;color:var(--bad);font-weight:700;box-shadow:none;padding:2px;cursor:pointer}
+.fslot .fname{font-size:11px;color:var(--text)}
+.rowlabel{font-size:11px;color:var(--muted);margin:8px 0 2px}
+.dragchar{cursor:grab}
+/* 詠唱條與護盾 */
+.unit .ucast{height:4px;background:#2c3036cc;border:1px solid #22252b;border-radius:2px;margin:2px 10px 0;overflow:hidden;visibility:hidden}
+.unit .ucastfill{height:100%;background:linear-gradient(90deg,#ffd166,#ff8c42)}
+.unit .uhp{position:relative}
+.unit .ushield{position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,.65);width:0;z-index:2;border-radius:2px}
+.unit .uhpfill{position:relative;z-index:1}
+/* 彩色戰鬥飄字（pixel 風） */
+.dmg.hurt{color:#ff6b6b}
+.dmg.crit{color:#ff4040;font-size:17px;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px #000}
+.dmg.heal{color:#8fe3a5}
+.dmg.burn{background:linear-gradient(180deg,#ffd166,#ff5f2e);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 1px #000)}
+.dmg.poison{background:linear-gradient(180deg,#d9a6ff,#8a4fb0);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 1px #000)}
+.dmg.ice{background:linear-gradient(180deg,#dff4ff,#5a9de0);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 1px 1px #000)}
+.dmg.control{color:#ffd35c;font-size:12px}
+.dmg.skillname{color:#fff;font-size:11px;background:#00000088;padding:1px 4px;border-radius:4px}
+.dmg.block{color:#e8ecef;font-size:12px}
+.dmg.interrupt{color:#ff9c9c;font-size:12px;font-weight:700}
 .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal-mask[hidden]{display:none}
 .modal{position:relative;background:var(--panel);border:3px solid var(--line);border-radius:12px;box-shadow:inset 0 2px 0 var(--bevel-hi),inset 0 -3px 0 var(--bevel-lo),0 8px 24px rgba(0,0,0,.45);padding:16px;max-width:420px;width:100%;max-height:80vh;overflow:auto;animation:modalIn .3s cubic-bezier(.25,.9,.35,1.2)}
